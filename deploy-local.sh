@@ -11,7 +11,7 @@ DEPLOY_PATH=~/zkbnb-deploy
 KEY_PATH=~/.zkbnb
 ZkBNB_REPO_PATH=$(cd `dirname $0`; pwd)
 CMC_TOKEN=cfce503f-fake-fake-fake-bbab5257dac8
-BSC_TESTNET_PRIVATE_KEY=acbaa26******************************a88367d9
+BSC_TESTNET_PRIVATE_KEY=bb7a4d97b99eb0cb2af53f4eca761eed823606181955e6f956927b8a15866c33
 
 export PATH=$PATH:/usr/local/go/bin:/usr/local/go/bin:/root/go/bin
 echo '0. stop old database/redis and docker run new database/redis'
@@ -25,23 +25,23 @@ docker run --name postgres -p 5432:5432 -e PGDATA=/var/lib/postgresql/pgdata  -e
 echo '1. basic config and git clone repos'
 export PATH=$PATH:/usr/local/go/bin/
 cd ~
-rm -rf ${DEPLOY_PATH}-bak && mv ${DEPLOY_PATH} ${DEPLOY_PATH}-bak
-mkdir -p ${DEPLOY_PATH} && cd ${DEPLOY_PATH}
-git clone --branch develop  https://github.com/bnb-chain/zkbnb-contract.git
-git clone --branch develop https://github.com/bnb-chain/zkbnb-crypto.git
-cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
+#rm -rf ${DEPLOY_PATH}-bak && mv ${DEPLOY_PATH} ${DEPLOY_PATH}-bak
+#mkdir -p ${DEPLOY_PATH} && cd ${DEPLOY_PATH}
+#git clone --branch develop  https://github.com/bnb-chain/zkbnb-contract.git
+#git clone --branch develop https://github.com/bnb-chain/zkbnb-crypto.git
+#cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
 
 
-flag=$1
-if [ $flag = "new" ]; then
-  echo "new crypto env"
-  echo '2. start generate zkbnb.vk and zkbnb.pk'
-  cd ${DEPLOY_PATH}
-  cd zkbnb-crypto && go test ./circuit/solidity -timeout 99999s -run TestExportSol
-  cd ${DEPLOY_PATH}
-  mkdir -p $KEY_PATH
-  cp -r ./zkbnb-crypto/circuit/solidity/* $KEY_PATH
-fi
+#flag=$1
+#if [ $flag = "new" ]; then
+#  echo "new crypto env"
+#  echo '2. start generate zkbnb.vk and zkbnb.pk'
+#  cd ${DEPLOY_PATH}
+#  cd zkbnb-crypto && go test ./circuit/solidity -timeout 99999s -run TestExportSol
+#  cd ${DEPLOY_PATH}
+#  mkdir -p $KEY_PATH
+#  cp -r ./zkbnb-crypto/circuit/solidity/* $KEY_PATH
+#fi
 
 
 
@@ -60,12 +60,13 @@ echo 'latest block number = ' $blockNumber
 
 echo '4-2. deploy contracts, register and deposit on BSC Testnet'
 cd ${DEPLOY_PATH}
-cd ./zkbnb-contract &&  echo "BSC_TESTNET_PRIVATE_KEY=${BSC_TESTNET_PRIVATE_KEY}" > .env && yarn install
-npx hardhat --network BSCTestnet run ./scripts/deploy-keccak256/deploy.js
+cd ./zkbnb-contract &&  echo "BSC_TESTNET_PRIVATE_KEY=${BSC_TESTNET_PRIVATE_KEY}" > .env
+sudo chmod 777 ./
+npx hardhat --network local run ./scripts/deploy-keccak256/deploy.js
 echo 'Recorded latest contract addresses into ${DEPLOY_PATH}/zkbnb-contract/info/addresses.json'
 
-npx hardhat --network BSCTestnet run ./scripts/deploy-keccak256/register.js
-npx hardhat --network BSCTestnet run ./scripts/deploy-keccak256/deposit.js
+npx hardhat --network local run ./scripts/deploy-keccak256/register.js
+npx hardhat --network local run ./scripts/deploy-keccak256/deposit.js
 
 
 echo '5. modify deployed contracts into zkbnb config'
