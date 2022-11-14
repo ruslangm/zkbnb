@@ -61,8 +61,6 @@ func (e *FullExitNftExecutor) Prepare() error {
 		CreatorAccountIndex: emptyNftInfo.CreatorAccountIndex,
 		OwnerAccountIndex:   emptyNftInfo.OwnerAccountIndex,
 		NftContentHash:      emptyNftInfo.NftContentHash,
-		NftL1Address:        emptyNftInfo.NftL1Address,
-		NftL1TokenId:        emptyNftInfo.NftL1TokenId,
 		CreatorTreasuryRate: emptyNftInfo.CreatorTreasuryRate,
 		CollectionId:        emptyNftInfo.CollectionId,
 	}
@@ -81,7 +79,9 @@ func (e *FullExitNftExecutor) Prepare() error {
 
 	// Mark the tree states that would be affected in this executor.
 	e.MarkNftDirty(txInfo.NftIndex)
-	e.MarkAccountAssetsDirty(txInfo.AccountIndex, []int64{types.EmptyAccountAssetId}) // Prepare asset 0 for generate an empty tx detail.
+	e.MarkAccountAssetsDirty(txInfo.AccountIndex, []int64{types.EmptyAccountAssetId})        // Prepare asset 0 for generate an empty tx detail.
+	e.MarkAccountAssetsDirty(txInfo.CreatorAccountIndex, []int64{types.EmptyAccountAssetId}) // Prepare asset 0 for generate an empty tx detail.
+
 	err = e.BaseExecutor.Prepare()
 	if err != nil {
 		return err
@@ -98,8 +98,6 @@ func (e *FullExitNftExecutor) Prepare() error {
 		}
 		txInfo.CreatorAccountNameHash = common.FromHex(creator.AccountNameHash)
 	}
-	txInfo.NftL1Address = exitNft.NftL1Address
-	txInfo.NftL1TokenId, _ = new(big.Int).SetString(exitNft.NftL1TokenId, 10)
 	txInfo.NftContentHash = common.FromHex(exitNft.NftContentHash)
 	txInfo.CollectionId = exitNft.CollectionId
 
@@ -125,8 +123,6 @@ func (e *FullExitNftExecutor) ApplyTransaction() error {
 		CreatorAccountIndex: emptyNftInfo.CreatorAccountIndex,
 		OwnerAccountIndex:   emptyNftInfo.OwnerAccountIndex,
 		NftContentHash:      emptyNftInfo.NftContentHash,
-		NftL1Address:        emptyNftInfo.NftL1Address,
-		NftL1TokenId:        emptyNftInfo.NftL1TokenId,
 		CreatorTreasuryRate: emptyNftInfo.CreatorTreasuryRate,
 		CollectionId:        emptyNftInfo.CollectionId,
 	}
@@ -146,18 +142,10 @@ func (e *FullExitNftExecutor) GeneratePubData() error {
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.CreatorTreasuryRate)))
 	buf.Write(common2.Uint40ToBytes(txInfo.NftIndex))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.CollectionId)))
-	chunk1 := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(common2.AddressStrToBytes(txInfo.NftL1Address))
-	chunk2 := common2.PrefixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk1)
-	buf.Write(chunk2)
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.AccountNameHash))
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.CreatorAccountNameHash))
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.NftContentHash))
-	buf.Write(common2.Uint256ToBytes(txInfo.NftL1TokenId))
-	pubData := buf.Bytes()
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PriorityOperations++
@@ -188,7 +176,13 @@ func (e *FullExitNftExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 	if err != nil {
 		return nil, err
 	}
-	txDetails := make([]*tx.TxDetail, 0, 2)
+
+	creatorAccount, err := e.bc.StateDB().GetFormatAccount(txInfo.CreatorAccountIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	txDetails := make([]*tx.TxDetail, 0, 3)
 
 	// user info
 	accountOrder := int64(0)
@@ -223,8 +217,6 @@ func (e *FullExitNftExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 			oldNft.CreatorAccountIndex,
 			oldNft.OwnerAccountIndex,
 			oldNft.NftContentHash,
-			oldNft.NftL1TokenId,
-			oldNft.NftL1Address,
 			oldNft.CreatorTreasuryRate,
 			oldNft.CollectionId,
 		)
@@ -244,6 +236,27 @@ func (e *FullExitNftExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 		Order:           order,
 		Nonce:           exitAccount.Nonce,
 		CollectionNonce: exitAccount.CollectionNonce,
+	})
+
+	// create account empty delta
+	order++
+	accountOrder++
+	creatorAccountBalance := creatorAccount.AssetInfo[types.EmptyAccountAssetId]
+	txDetails = append(txDetails, &tx.TxDetail{
+		AssetId:      types.EmptyAccountAssetId,
+		AssetType:    types.FungibleAssetType,
+		AccountIndex: txInfo.CreatorAccountIndex,
+		AccountName:  creatorAccount.AccountName,
+		Balance:      creatorAccountBalance.String(),
+		BalanceDelta: types.ConstructAccountAsset(
+			types.EmptyAccountAssetId,
+			types.ZeroBigInt,
+			types.ZeroBigInt,
+		).String(),
+		Order:           order,
+		AccountOrder:    accountOrder,
+		Nonce:           creatorAccount.Nonce,
+		CollectionNonce: creatorAccount.CollectionNonce,
 	})
 
 	return txDetails, nil
