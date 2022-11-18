@@ -19,6 +19,7 @@ package chain
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -50,8 +51,9 @@ func CreateBlockCommitment(
 	//hFunc := mimc.NewMiMC()
 	//hFunc.Write(buf.Bytes())
 	//commitment := hFunc.Sum(nil)
-	// fmt.Printf("commitment is %x\n", buf.Bytes())
+	fmt.Printf("commitment is %x\n", buf.Bytes())
 	commitment := common2.KeccakHash(buf.Bytes())
+	fmt.Printf("commitment hash is %x\n", commitment[:])
 	return common.Bytes2Hex(commitment)
 }
 
