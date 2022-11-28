@@ -12,8 +12,8 @@ DEPLOY_PATH=~/zkbnb-deploy
 KEY_PATH=~/.zkbnb
 ZkBNB_REPO_PATH=$(cd `dirname $0`; pwd)
 CMC_TOKEN=cfce503f-fake-fake-fake-bbab5257dac8
-NETWORK_RPC_SYS_CONFIG_NAME=BscTestNetworkRpc # BscTestNetworkRpc or LocalTestNetworkRpc
-BSC_TESTNET_RPC=https://data-seed-prebsc-1-s1.binance.org:8545
+NETWORK_RPC_SYS_CONFIG_NAME=LocalTestNetworkRpc #or LocalTestNetworkRpc
+BSC_TESTNET_RPC=http://127.0.0.1:8545 #or http://127.0.0.1:8545
 BSC_TESTNET_PRIVATE_KEY=acbaa26******************************a88367d9
 
 export PATH=$PATH:/usr/local/go/bin:/usr/local/go/bin:/root/go/bin
@@ -36,19 +36,19 @@ cd ~
 #mkdir -p ${DEPLOY_PATH} && cd ${DEPLOY_PATH}
 #git clone --branch develop  https://github.com/bnb-chain/zkbnb-contract.git
 #git clone --branch develop https://github.com/bnb-chain/zkbnb-crypto.git
-#cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
+cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
 
 
-#flag=$1
-#if [ $flag = "new" ]; then
-#  echo "new crypto env"
-#  echo '2. start generate zkbnb.vk and zkbnb.pk'
-#  cd ${DEPLOY_PATH}
-#  cd zkbnb-crypto && go test ./circuit/solidity -timeout 99999s -run TestExportSol
-#  cd ${DEPLOY_PATH}
-#  mkdir -p $KEY_PATH
-#  cp -r ./zkbnb-crypto/circuit/solidity/* $KEY_PATH
-#fi
+flag=$1
+if [ $flag = "new" ]; then
+  echo "new crypto env"
+  echo '2. start generate zkbnb.vk and zkbnb.pk'
+  cd ${DEPLOY_PATH}
+  cd zkbnb-crypto && go test ./circuit/solidity -timeout 99999s -run TestExportSol
+  cd ${DEPLOY_PATH}
+  mkdir -p $KEY_PATH
+  cp -r ./zkbnb-crypto/circuit/solidity/* $KEY_PATH
+fi
 
 
 
@@ -209,7 +209,7 @@ CacheRedis:
     Type: node
 
 BlockConfig:
-  OptionalBlockSizes: [10]
+  OptionalBlockSizes: [1]
 
 TreeDB:
   Driver: memorydb

@@ -477,7 +477,7 @@ type treeUpdateResp struct {
 	err   error
 }
 
-func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
+func (s *StateDB) IntermediateRoot(cleanDirty bool, blockHeight int64) error {
 	taskNum := 0
 	resultChan := make(chan *treeUpdateResp, 1)
 	defer close(resultChan)
@@ -548,6 +548,9 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 			pendingNftItem = append(pendingNftItem, bsmt.Item{Key: uint64(result.index), Val: result.leaf})
 		}
 	}
+	accItem, _ := json.Marshal(pendingAccountItem)
+	logx.Infof("BEFORE: blockHeight=%s, stateRoot=%s, accountTreeRoot=%s, accountTreeUpdateItems=%s",
+		blockHeight, s.StateRoot, common.Bytes2Hex(s.AccountTree.Root()), string(accItem))
 	err := gopool.Submit(func() {
 		resultChan <- &treeUpdateResp{
 			role: accountTreeRole,
@@ -577,6 +580,8 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool) error {
 	hFunc.Write(s.AccountTree.Root())
 	hFunc.Write(s.NftTree.Root())
 	s.StateRoot = common.Bytes2Hex(hFunc.Sum(nil))
+	logx.Infof("AFTER: blockHeight=%s, stateRoot=%s, accountTreeRoot=%s, nftTreeRoot=%s",
+		blockHeight, s.StateRoot, common.Bytes2Hex(s.AccountTree.Root()), common.Bytes2Hex(s.NftTree.Root()))
 	return nil
 }
 
