@@ -568,6 +568,9 @@ func (s *StateDB) IntermediateRoot(cleanDirty bool, blockHeight int64) error {
 			pendingNftItem = append(pendingNftItem, bsmt.Item{Key: uint64(result.index), Val: result.leaf})
 		}
 	}
+	accItem, _ := json.Marshal(pendingAccountItem)
+	logx.Infof("blockHeight=%v, treeVersion=%v, stateRoot=%s, accountTreeRoot=%s, accountTreeUpdateItems=%s",
+		blockHeight, s.AccountTree.LatestVersion(), s.StateRoot, common.Bytes2Hex(s.AccountTree.Root()), string(accItem))
 	err := gopool.Submit(func() {
 		resultChan <- &treeUpdateResp{
 			role: accountTreeRole,
