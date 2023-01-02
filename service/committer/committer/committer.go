@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bnb-chain/zkbnb-crypto/ffmath"
+	"github.com/bnb-chain/zkbnb/common"
 	"github.com/bnb-chain/zkbnb/common/gopool"
 	"github.com/bnb-chain/zkbnb/core/statedb"
 	"github.com/bnb-chain/zkbnb/dao/account"
@@ -278,6 +279,7 @@ type Config struct {
 		SaveBlockDataPoolSize int  `json:",optional"`
 	}
 	LogConf logx.LogConf
+	IpfsUrl string
 }
 
 type Committer struct {
@@ -296,6 +298,7 @@ type Committer struct {
 	saveBlockDataWorker               *core.Worker
 	finalSaveBlockDataWorker          *core.Worker
 	pool                              *ants.Pool
+	ipfs                              *common.IPFS
 }
 
 type PendingMap struct {
@@ -327,6 +330,7 @@ func NewCommitter(config *Config) (*Committer, error) {
 		saveBlockDataPoolSize = 100
 	}
 	pool, err := ants.NewPool(saveBlockDataPoolSize)
+	common.NewIPFS(config.IpfsUrl)
 
 	committer := &Committer{
 		running:            true,

@@ -16,10 +16,13 @@ type IPFS struct {
 	shell *shell.Shell
 }
 
+var Ipfs *IPFS
+
 func NewIPFS(url string) *IPFS {
-	return &IPFS{
+	Ipfs = &IPFS{
 		shell: shell.NewShell(url),
 	}
+	return Ipfs
 }
 
 func (i *IPFS) Upload(value string, index int64) (string, error) {

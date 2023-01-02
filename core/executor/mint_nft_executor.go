@@ -3,7 +3,6 @@ package executor
 import (
 	"bytes"
 	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -80,7 +79,19 @@ func (e *MintNftExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 		return types.AppErrInvalidToAccountNameHash
 	}
 
+	_, err = metaDataFormatCheck(txInfo.MetaData)
+
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+/**
+market那边要展示，要符合那边的约束
+*/
+func metaDataFormatCheck(metaData string) (string, error) {
+	return "nil", nil
 }
 
 func (e *MintNftExecutor) ApplyTransaction() error {
@@ -98,6 +109,14 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 
 	stateCache := e.bc.StateDB()
 	stateCache.SetPendingAccount(txInfo.CreatorAccountIndex, creatorAccount)
+
+	ipfsHexCid, error := sendToIpfs(txInfo.MetaData, txInfo.NftIndex)
+	if error != nil {
+		return error
+	}
+
+	txInfo.NftContentHash = ipfsHexCid
+
 	stateCache.SetPendingNft(txInfo.NftIndex, &nft.L2Nft{
 		NftIndex:            txInfo.NftIndex,
 		CreatorAccountIndex: txInfo.CreatorAccountIndex,
@@ -108,6 +127,15 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 	})
 	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
+}
+
+func sendToIpfs(data string, nftIndex int64) (string, error) {
+	cid, error := common2.Ipfs.Upload(data, nftIndex)
+
+	if error != nil {
+		return cid, error
+	}
+	return cid, nil
 }
 
 func (e *MintNftExecutor) GeneratePubData() error {
