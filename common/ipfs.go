@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	shell "github.com/ipfs/go-ipfs-api"
 	file "github.com/ipfs/go-ipfs-files"
+	"github.com/mr-tron/base58/base58"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type IPFS struct {
@@ -42,7 +45,13 @@ func (i *IPFS) Upload(value string, index int64) (string, error) {
 		fmt.Println("上传ipfs时错误：", err)
 		return "", err
 	}
-	return hash, nil
+	base, err := base58.Decode(hash)
+	if err != nil {
+		return "", err
+	}
+	hex := hexutil.Encode(base)
+	lowerHex := strings.ToLower(hex)
+	return strings.Replace(lowerHex, "0x1220", "", 1), nil
 }
 
 func (i *IPFS) GenerateIPNS(cid string, index string) (*shell.Key, error) {

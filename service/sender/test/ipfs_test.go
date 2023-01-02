@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	shell "github.com/ipfs/go-ipfs-api"
 	file "github.com/ipfs/go-ipfs-files"
+	"github.com/mr-tron/base58/base58"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -32,14 +35,29 @@ func UploadIPFS(shell *shell.Shell, str string) string {
 }
 
 // 数据上传到ipfs
-func UploadFile(shell *shell.Shell, str []byte, token int64) string {
-	tmppath, err := os.MkdirTemp("/Users/user", "files-test")
+func UploadFile(shell *shell.Shell) string {
+	tmppath, err := os.MkdirTemp("/Users/user", "files-test2")
 	if err != nil {
 		return ""
 	}
 	defer os.RemoveAll(tmppath)
-	path := filepath.Join(tmppath, strconv.FormatInt(token, 10))
-	err = file.WriteTo(file.NewBytesFile(str), path)
+	hash, err := shell.AddDir(tmppath)
+	if err != nil {
+		fmt.Println("上传ipfs时错误：", err)
+	}
+	return hash
+}
+
+// 数据上传到ipfs
+func UploadJson(shell *shell.Shell, str string, index int64) string {
+	tmppath, err := os.MkdirTemp("/Users/user", "files-test2")
+	if err != nil {
+		return ""
+	}
+	defer os.RemoveAll(tmppath)
+	path := filepath.Join(tmppath, strconv.FormatInt(index, 10))
+	b, err := json.Marshal(str)
+	err = file.WriteTo(file.NewBytesFile(b), path)
 	if err != nil {
 		return ""
 	}
@@ -84,36 +102,26 @@ func unmarshalStruct(str []byte) Transaction {
 
 func TestGet1Txs(t *testing.T) {
 	sh := shell.NewShell("localhost:5001")
-	//生成一个交易结构体(未来的通道)
-	transaction := Transaction{
-		Person1:      "Aaron1211",
-		Person2:      "Bob11",
-		Person1money: "1000",
-		Person2money: "20011",
-	}
-	//结构体序列化
-	data := marshalStruct(transaction)
-
-	//上传到ipfs
-	hash1 := UploadFile(sh, data, 1)
-	fmt.Println("文件hash1是", hash1)
-
-	//上传到ipfs
-	hash := UploadIPFS(sh, string(data))
+	var v string = "{\"TxType\":2212222,\"NftIndex\":0,\"AccountNameHash\":\"IUGc18NfYlBnnB/OCsdC52AOnWDybw0EPf6CufmcoPM=\",\"AccountIndex\":0,\"CreatorAccountIndex\":0,\"CreatorTreasuryRate\":0,\"CreatorAccountNameHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"NftContentHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"CollectionId\":0}"
+	hash := UploadJson(sh, v, 1)
 	fmt.Println("文件hash是", hash)
-	//从ipfs下载数据
-	str2 := CatIPFS(sh, hash)
-	//数据反序列化
-	transaction2 := unmarshalStruct([]byte(str2))
-	//验证下数据
-	fmt.Println(transaction2)
-
 }
 
 func TestKeyIpns(t *testing.T) {
 	sh := shell.NewShell("localhost:5001")
-	key1, _ := sh.KeyGen(context.Background(), "cid+index", shell.KeyGen.Type("rsa"))
+	key1, _ := sh.KeyGen(context.Background(), "cid+index", shell.KeyGen.Type("ed25519"))
 	fmt.Println(key1)
+}
+
+func TestCidCode(t *testing.T) {
+	v0 := "QmRwPwcyZxH8H6cqNFeEvZgDsRMMs9RsFipR2YX4bhiSfh"
+	b0, _ := base58.Decode(v0)
+	hex := hexutil.Encode(b0)
+	fmt.Println("v0", strings.ToLower(hex))
+	h, _ := hexutil.Decode(strings.ToLower(hex))
+	hs := base58.Encode(h)
+	fmt.Println("hs", hs)
+
 }
 
 func TestPublish(t *testing.T) {
