@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -28,15 +27,14 @@ func NewIPFS(url string) *IPFS {
 	return Ipfs
 }
 
-func (i *IPFS) Upload(value string, index int64) (string, error) {
+func (i *IPFS) Upload(value []byte, index int64) (string, error) {
 	tmppath, err := os.MkdirTemp("", strconv.FormatInt(index, 10))
 	if err != nil {
 		return "", err
 	}
 	defer os.RemoveAll(tmppath)
 	path := filepath.Join(tmppath, strconv.FormatInt(index, 10))
-	b, err := json.Marshal(value)
-	err = file.WriteTo(file.NewBytesFile(b), path)
+	err = file.WriteTo(file.NewBytesFile(value), path)
 	if err != nil {
 		return "", err
 	}

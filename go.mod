@@ -27,10 +27,8 @@ require (
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/go-openapi/spec v0.20.7 // indirect
-	github.com/go-openapi/swag v0.22.3 // indirect
+	github.com/go-openapi/swag v0.22.3
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
-	github.com/ipfs/go-ipfs-api v0.3.0
-	github.com/ipfs/go-ipfs-files v0.2.0
 	github.com/klauspost/cpuid/v2 v2.2.2 // indirect
 	github.com/libp2p/go-libp2p v0.24.1 // indirect
 	github.com/libp2p/go-libp2p-core v0.20.1 // indirect
@@ -51,13 +49,22 @@ require (
 	github.com/eko/gocache/v2 v2.3.1
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/go-redis/redis/v8 v8.11.5
+	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
+	github.com/ipfs-cluster/ipfs-cluster v1.0.4 // indirect
+	github.com/ipfs/go-ipfs-api v0.3.0
+	github.com/ipfs/go-ipfs-files v0.1.1
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mr-tron/base58 v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/rs/cors v1.8.2 // indirect
 	github.com/stretchr/testify v1.8.1
+	github.com/urfave/cli v1.22.10 // indirect
 	github.com/urfave/cli/v2 v2.23.6
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	gorm.io/driver/postgres v1.3.6
 	k8s.io/apimachinery v0.24.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42
 )
 
 replace (
@@ -68,4 +75,4 @@ replace (
 
 replace github.com/bnb-chain/zkbnb-smt => github.com/qct/zkbnb-smt v0.0.0-20221203161605-59c0f417b4e8
 
-replace github.com/bnb-chain/zkbnb-crypto => /Users/user/sdk/go_path/src/zkbnb-all/zkbnb-crypto
+replace github.com/bnb-chain/zkbnb-crypto => /Users/user/zk/fork/zkbnb-crypto

@@ -3,16 +3,19 @@ package executor
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/zeromicro/go-zero/core/logx"
-
+	"fmt"
 	"github.com/bnb-chain/zkbnb-crypto/ffmath"
 	"github.com/bnb-chain/zkbnb-crypto/wasm/txtypes"
 	common2 "github.com/bnb-chain/zkbnb/common"
+	nftModels "github.com/bnb-chain/zkbnb/core/model"
 	"github.com/bnb-chain/zkbnb/dao/nft"
 	"github.com/bnb-chain/zkbnb/dao/tx"
 	"github.com/bnb-chain/zkbnb/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/go-openapi/swag"
+	"github.com/pkg/errors"
+	"github.com/zeromicro/go-zero/core/logx"
+	"k8s.io/kube-openapi/pkg/validation/validate"
 )
 
 type MintNftExecutor struct {
@@ -51,7 +54,9 @@ func (e *MintNftExecutor) Prepare() error {
 
 func (e *MintNftExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	txInfo := e.txInfo
-
+	if err := e.Validate(); err != nil {
+		return err
+	}
 	if txInfo.CreatorAccountIndex != txInfo.ToAccountIndex {
 		return types.AppErrInvalidToAccount
 	}
@@ -78,20 +83,7 @@ func (e *MintNftExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	if txInfo.ToAccountNameHash != toAccount.AccountNameHash {
 		return types.AppErrInvalidToAccountNameHash
 	}
-
-	_, err = metaDataFormatCheck(txInfo.MetaData)
-
-	if err != nil {
-		return err
-	}
 	return nil
-}
-
-/**
-market那边要展示，要符合那边的约束
-*/
-func metaDataFormatCheck(metaData string) (string, error) {
-	return "nil", nil
 }
 
 func (e *MintNftExecutor) ApplyTransaction() error {
@@ -110,13 +102,17 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 	stateCache := e.bc.StateDB()
 	stateCache.SetPendingAccount(txInfo.CreatorAccountIndex, creatorAccount)
 
-	ipfsHexCid, error := sendToIpfs(txInfo.MetaData, txInfo.NftIndex)
-	if error != nil {
-		return error
+	ipfsHexCid, err := sendToIpfs(txInfo.MetaData, txInfo.NftIndex)
+	if err != nil {
+		return err
 	}
 
 	txInfo.NftContentHash = ipfsHexCid
-
+	txInfo.MetaData.IpnsName = ""
+	bm, err := json.Marshal(txInfo.MetaData)
+	if err != nil {
+		return err
+	}
 	stateCache.SetPendingNft(txInfo.NftIndex, &nft.L2Nft{
 		NftIndex:            txInfo.NftIndex,
 		CreatorAccountIndex: txInfo.CreatorAccountIndex,
@@ -124,13 +120,19 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 		NftContentHash:      txInfo.NftContentHash,
 		CreatorTreasuryRate: txInfo.CreatorTreasuryRate,
 		CollectionId:        txInfo.NftCollectionId,
+		IpnsName:            "",
+		Metadata:            string(bm),
 	})
 	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
 }
 
-func sendToIpfs(data string, nftIndex int64) (string, error) {
-	cid, error := common2.Ipfs.Upload(data, nftIndex)
+func sendToIpfs(data *txtypes.NftMetaData, nftIndex int64) (string, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	cid, error := common2.Ipfs.Upload(b, nftIndex)
 
 	if error != nil {
 		return cid, error
@@ -281,4 +283,94 @@ func (e *MintNftExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 		IsGas:           true,
 	})
 	return txDetails, nil
+}
+
+func (e *MintNftExecutor) Validate() error {
+	var res []error
+	if err := e.validateName(); err != nil {
+		res = append(res, err)
+	}
+	if err := e.validateImage(); err != nil {
+		res = append(res, err)
+	}
+	if err := e.validateAttribute(); err != nil {
+		res = append(res, err)
+	}
+	if len(res) > 0 {
+		err := fmt.Sprintln(res)
+		return errors.New(err)
+	}
+	return nil
+}
+
+func (e *MintNftExecutor) validateCollectionID() error {
+
+	if err := validate.Required("collectionId", "body", e.txInfo.NftCollectionId); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *MintNftExecutor) validateCreatorEarningRate() error {
+
+	if err := validate.Required("creatorEarningRate", "body", e.txInfo.CreatorTreasuryRate); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *MintNftExecutor) validateImage() error {
+
+	if err := validate.Required("image", "body", e.txInfo.MetaData.Image); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *MintNftExecutor) validateName() error {
+
+	if err := validate.Required("name", "body", e.txInfo.MetaData.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *MintNftExecutor) validateAttribute() error {
+	if swag.IsZero(e.txInfo.MetaData.Attributes) { // not required
+		return nil
+	}
+	var res []error
+	var result []*nftModels.AssetAttribute
+	err := json.Unmarshal([]byte(e.txInfo.MetaData.Attributes), &result)
+	if err != nil {
+		return err
+	}
+	if swag.IsZero(result) { // not required
+		return nil
+	}
+	for i := 0; i < len(result); i++ {
+		if swag.IsZero(result[i]) { // not required
+			continue
+		}
+		if result[i] != nil {
+			if *result[i].Name == "Properties" {
+				if err := result[i].ValidateValue(); err != nil {
+					res = append(res, err)
+				}
+			} else {
+				if err := result[i].Validate(); err != nil {
+					res = append(res, err)
+				}
+			}
+		}
+	}
+	if len(res) > 0 {
+		err := fmt.Sprintln(res)
+		return errors.New(err)
+	}
+	return nil
 }

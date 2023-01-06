@@ -101,8 +101,8 @@ func unmarshalStruct(str []byte) Transaction {
 }
 
 func TestGet1Txs(t *testing.T) {
-	sh := shell.NewShell("localhost:5001")
-	var v string = "{\"TxType\":2212222,\"NftIndex\":0,\"AccountNameHash\":\"IUGc18NfYlBnnB/OCsdC52AOnWDybw0EPf6CufmcoPM=\",\"AccountIndex\":0,\"CreatorAccountIndex\":0,\"CreatorTreasuryRate\":0,\"CreatorAccountNameHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"NftContentHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"CollectionId\":0}"
+	sh := shell.NewShell("10.23.34.36:5001")
+	var v = "{\"TxType\":2212222,\"NftIndex\":0,\"AccountNameHash\":\"IUGc18NfYlBnnB/OCsdC52AOnWDybw0EPf6CufmcoPM=\",\"AccountIndex\":0,\"CreatorAccountIndex\":0,\"CreatorTreasuryRate\":0,\"CreatorAccountNameHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"NftContentHash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"CollectionId\":0}"
 	hash := UploadJson(sh, v, 1)
 	fmt.Println("文件hash是", hash)
 }
@@ -117,7 +117,8 @@ func TestCidCode(t *testing.T) {
 	v0 := "QmRwPwcyZxH8H6cqNFeEvZgDsRMMs9RsFipR2YX4bhiSfh"
 	b0, _ := base58.Decode(v0)
 	hex := hexutil.Encode(b0)
-	fmt.Println("v0", strings.ToLower(hex))
+	lowerHex := strings.ToLower(hex)
+	fmt.Println("v0", strings.Replace(lowerHex, "0x1220", "", 1))
 	h, _ := hexutil.Decode(strings.ToLower(hex))
 	hs := base58.Encode(h)
 	fmt.Println("hs", hs)
@@ -131,4 +132,11 @@ func TestPublish(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println(resp.Value)
+}
+
+func TestCid(t *testing.T) {
+	var hash = "0x1220" + "b08ee35c1b9a13fddbb07e4cd0f6eeb5b5c8a651b217a69b701c79e15a98c8aa"
+	b, _ := hexutil.Decode(hash)
+	cid := base58.Encode(b)
+	fmt.Println(cid)
 }

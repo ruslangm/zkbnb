@@ -3,6 +3,9 @@ package executor
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/go-openapi/swag"
+	"k8s.io/kube-openapi/pkg/validation/validate"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -56,6 +59,9 @@ func (e *CreateCollectionExecutor) Prepare() error {
 
 func (e *CreateCollectionExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	txInfo := e.txInfo
+	if err := e.Validate(); err != nil {
+		return err
+	}
 
 	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk, skipSigChk)
 	if err != nil {
@@ -201,4 +207,216 @@ func (e *CreateCollectionExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 		IsGas:        true,
 	})
 	return txDetails, nil
+}
+
+func (e *CreateCollectionExecutor) Validate() error {
+	var res []error
+
+	if err := e.validateBannerImage(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateCategoryID(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateDiscordLink(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateExternalLink(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateFeaturedImage(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateInstagramUserName(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateLogoImage(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateShortname(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateTelegramLink(); err != nil {
+		res = append(res, err)
+	}
+
+	if err := e.validateTwitterUserName(); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		err := fmt.Sprintln(res)
+		return errors.New(err)
+	}
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateBannerImage() error {
+	if swag.IsZero(e.txInfo.MetaData.BannerImage) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("bannerImage", "body", e.txInfo.MetaData.BannerImage, 4); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("bannerImage", "body", e.txInfo.MetaData.BannerImage, 256); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateCategoryID() error {
+
+	if err := validate.Required("categoryId", "body", e.txInfo.MetaData.CategoryID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateDiscordLink() error {
+	if swag.IsZero(e.txInfo.MetaData.DiscordLink) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("discordLink", "body", e.txInfo.MetaData.DiscordLink, 3); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("discordLink", "body", e.txInfo.MetaData.DiscordLink, 64); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateExternalLink() error {
+	if swag.IsZero(e.txInfo.MetaData.ExternalLink) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("externalLink", "body", e.txInfo.MetaData.ExternalLink, 4); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("externalLink", "body", e.txInfo.MetaData.ExternalLink, 64); err != nil {
+		return err
+	}
+
+	if err := validate.Pattern("externalLink", "body", e.txInfo.MetaData.ExternalLink, `^[a-zA-z]+://[^\s]*$`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateFeaturedImage() error {
+	if swag.IsZero(e.txInfo.MetaData.FeaturedImage) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("featuredImage", "body", e.txInfo.MetaData.FeaturedImage, 4); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("featuredImage", "body", e.txInfo.MetaData.FeaturedImage, 256); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateInstagramUserName() error {
+	if swag.IsZero(e.txInfo.MetaData.InstagramUserName) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("instagramUserName", "body", e.txInfo.MetaData.InstagramUserName, 3); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("instagramUserName", "body", e.txInfo.MetaData.InstagramUserName, 64); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateLogoImage() error {
+	if swag.IsZero(e.txInfo.MetaData.LogoImage) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("logoImage", "body", e.txInfo.MetaData.LogoImage, 4); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("logoImage", "body", e.txInfo.MetaData.LogoImage, 256); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateShortname() error {
+
+	if err := validate.Required("shortname", "body", e.txInfo.MetaData.Shortname); err != nil {
+		return err
+	}
+
+	if err := validate.MinLength("shortname", "body", e.txInfo.MetaData.Shortname, 3); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("shortname", "body", e.txInfo.MetaData.Shortname, 64); err != nil {
+		return err
+	}
+
+	if err := validate.Pattern("shortname", "body", e.txInfo.MetaData.Shortname, `^\d*[a-zA-Z_][a-zA-Z0-9_]*$`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateTelegramLink() error {
+	if swag.IsZero(e.txInfo.MetaData.TelegramLink) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("telegramLink", "body", e.txInfo.MetaData.TelegramLink, 3); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("telegramLink", "body", e.txInfo.MetaData.TelegramLink, 64); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *CreateCollectionExecutor) validateTwitterUserName() error {
+	if swag.IsZero(e.txInfo.MetaData.TwitterUserName) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("twitterUserName", "body", e.txInfo.MetaData.TwitterUserName, 3); err != nil {
+		return err
+	}
+
+	if err := validate.MaxLength("twitterUserName", "body", e.txInfo.MetaData.TwitterUserName, 64); err != nil {
+		return err
+	}
+
+	return nil
 }
