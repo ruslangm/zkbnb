@@ -52,8 +52,8 @@ func (i *IPFS) Upload(value []byte, index int64) (string, error) {
 	return strings.Replace(lowerHex, "0x1220", "", 1), nil
 }
 
-func (i *IPFS) GenerateIPNS(cid string, index string) (*shell.Key, error) {
-	return i.shell.KeyGen(context.Background(), fmt.Sprintf("%s-%s", cid, index), shell.KeyGen.Type("ed25519"))
+func (i *IPFS) GenerateIPNS(index int64) (*shell.Key, error) {
+	return i.shell.KeyGen(context.Background(), fmt.Sprintf("%s-%d", "ipns", index), shell.KeyGen.Type("ed25519"))
 }
 
 func (i *IPFS) PublishWithDetails(cid string, name string) (string, error) {
