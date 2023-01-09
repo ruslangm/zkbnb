@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -52,12 +53,20 @@ func (i *IPFS) Upload(value []byte, index int64) (string, error) {
 	return strings.Replace(lowerHex, "0x1220", "", 1), nil
 }
 
+func (i *IPFS) UploadIPNS(value string) (string, error) {
+	mhash, err := i.shell.Add(bytes.NewBufferString(value))
+	if err != nil {
+		return "", err
+	}
+	return mhash, err
+}
+
 func (i *IPFS) GenerateIPNS(index int64) (*shell.Key, error) {
 	return i.shell.KeyGen(context.Background(), fmt.Sprintf("%s-%d", "ipns", index), shell.KeyGen.Type("ed25519"))
 }
 
 func (i *IPFS) PublishWithDetails(cid string, name string) (string, error) {
-	cidPath := fmt.Sprintf("/%s/%s", "ipfs", cid)
+	cidPath := fmt.Sprintf("/%s-/%s", "ipfs", cid)
 	resp, err := i.shell.PublishWithDetails(cidPath, name, 0, 0, false)
 	if err != nil {
 		return "", err
@@ -66,4 +75,11 @@ func (i *IPFS) PublishWithDetails(cid string, name string) (string, error) {
 		return "", errors.New(fmt.Sprintf("Expected to receive %s but got %s", cidPath, resp.Value))
 	}
 	return resp.Value, nil
+}
+
+func (i *IPFS) GenerateCid() (nftContentHash string) {
+	var hash = "0x1220" + nftContentHash
+	b, _ := hexutil.Decode(hash)
+	cid := base58.Encode(b)
+	return cid
 }

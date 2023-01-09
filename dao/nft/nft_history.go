@@ -56,7 +56,7 @@ type (
 		CollectionId        int64
 		Status              int
 		L2BlockHeight       int64 `gorm:"index:idx_nft_index"`
-		IpnsName            string
+		IpnsKey             string
 		Metadata            string
 	}
 )

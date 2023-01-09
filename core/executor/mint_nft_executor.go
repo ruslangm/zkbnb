@@ -45,17 +45,22 @@ func (e *MintNftExecutor) Prepare() error {
 	txInfo.NftIndex = nextNftIndex
 
 	if !e.bc.StateDB().DryRun {
+		//key, err := common2.Ipfs.GenerateIPNS(txInfo.NftIndex)
+		//if err != nil {
+		//	return err
+		//}
 		ipfsHexCid, err := sendToIpfs(&nftModels.NftMetaData{
 			Image:       e.txInfo.MetaData.Image,
 			Name:        e.txInfo.MetaData.Name,
 			Description: e.txInfo.MetaData.Description,
 			Attributes:  e.txInfo.MetaData.Attributes,
-			IpnsName:    fmt.Sprintf("%s-%d", "ipns", txInfo.NftIndex),
+			Ipns:        "",
 		}, e.txInfo.NftIndex)
 		if err != nil {
 			return err
 		}
 		e.txInfo.NftContentHash = ipfsHexCid
+		e.txInfo.IpnsKey = ""
 	}
 	// Mark the tree states that would be affected in this executor.
 	e.MarkNftDirty(txInfo.NftIndex)
@@ -126,7 +131,7 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 		NftContentHash:      txInfo.NftContentHash,
 		CreatorTreasuryRate: txInfo.CreatorTreasuryRate,
 		CollectionId:        txInfo.NftCollectionId,
-		IpnsName:            "",
+		IpnsKey:             txInfo.IpnsKey,
 		Metadata:            string(bm),
 	})
 	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)

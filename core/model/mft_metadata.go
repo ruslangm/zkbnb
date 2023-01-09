@@ -5,5 +5,5 @@ type NftMetaData struct {
 	Name        string
 	Description string
 	Attributes  string
-	IpnsName    string
+	Ipns        string
 }

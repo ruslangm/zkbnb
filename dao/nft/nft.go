@@ -57,7 +57,7 @@ type (
 		CreatorTreasuryRate int64
 		CollectionId        int64
 		L2BlockHeight       int64 `gorm:"index:idx_nft_index"`
-		IpnsName            string
+		IpnsKey             string
 		Metadata            string
 	}
 )
@@ -145,7 +145,7 @@ func (m *defaultL2NftModel) UpdateNftsInTransact(tx *gorm.DB, nfts []*L2Nft) err
 func (m *defaultL2NftModel) BatchInsertOrUpdate(nfts []*L2Nft) (err error) {
 	dbTx := m.DB.Table(m.table).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_name", "metadata"}),
+		DoUpdates: clause.AssignmentColumns([]string{"creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_key", "metadata"}),
 	}).Create(&nfts)
 	if dbTx.Error != nil {
 		return dbTx.Error
@@ -173,7 +173,7 @@ func (m *defaultL2NftModel) UpdateByIndexInTransact(tx *gorm.DB, l2nft *L2Nft) e
 		"creator_treasury_rate": l2nft.CreatorTreasuryRate,
 		"collection_id":         l2nft.CollectionId,
 		"l2_block_height":       l2nft.L2BlockHeight,
-		"ipns_name":             l2nft.IpnsName,
+		"ipns_key":              l2nft.IpnsKey,
 		"metadata":              l2nft.Metadata,
 	})
 	if dbTx.Error != nil {
@@ -209,7 +209,7 @@ func (ai *L2Nft) DeepCopy() *L2Nft {
 		CreatorTreasuryRate: ai.CreatorTreasuryRate,
 		CollectionId:        ai.CollectionId,
 		L2BlockHeight:       ai.L2BlockHeight,
-		IpnsName:            ai.IpnsName,
+		IpnsKey:             ai.IpnsKey,
 		Metadata:            ai.Metadata,
 	}
 	return l2Nft
