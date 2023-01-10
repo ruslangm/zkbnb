@@ -409,6 +409,13 @@ type (
 		Total int64  `json:"total"`
 		Nfts  []*Nft `json:"nfts"`
 	}
+
+	NftIndex {
+		Index int64 `json:"index"`
+	}
+	History {
+		Mutable string `json:"mutable"`
+	}
 )
 
 type (
@@ -426,6 +433,19 @@ type (
 	}
 )
 
+type (
+	ReqGetNftIndex {
+		TxHash string `form:"tx_hash"`
+	}
+)
+
+type (
+	ReqUpdateNft {
+		NftIndex int64  `form:"nft_index"`
+		Mutable  string `form:"mutable"`
+	}
+)
+
 @server(
 	group: nft
 )
@@ -438,4 +458,12 @@ service server-api {
 	@doc "Get nfts of a specific account"
 	@handler GetAccountNfts
 	get /api/v1/accountNfts (ReqGetAccountNfts) returns (Nfts)
+	
+	@doc "Get nft_index of a nft by txHash"
+	@handler GetNftByTxHash
+	get /api/v1/getNftByTxHash (ReqGetNftIndex) returns (NftIndex)
+	
+	@doc "update nft metadata by nft_index"
+	@handler UpdateNftByIndex
+	post /api/v1/updateNftByIndex (ReqUpdateNft) returns (History)
 }

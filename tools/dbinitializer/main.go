@@ -59,22 +59,23 @@ type contractAddr struct {
 }
 
 type dao struct {
-	sysConfigModel       sysconfig.SysConfigModel
-	accountModel         account.AccountModel
-	accountHistoryModel  account.AccountHistoryModel
-	assetModel           asset.AssetModel
-	txPoolModel          tx.TxPoolModel
-	txDetailModel        tx.TxDetailModel
-	txModel              tx.TxModel
-	blockModel           block.BlockModel
-	compressedBlockModel compressedblock.CompressedBlockModel
-	blockWitnessModel    blockwitness.BlockWitnessModel
-	proofModel           proof.ProofModel
-	l1SyncedBlockModel   l1syncedblock.L1SyncedBlockModel
-	priorityRequestModel priorityrequest.PriorityRequestModel
-	l1RollupTModel       l1rolluptx.L1RollupTxModel
-	nftModel             nft.L2NftModel
-	nftHistoryModel      nft.L2NftHistoryModel
+	sysConfigModel          sysconfig.SysConfigModel
+	accountModel            account.AccountModel
+	accountHistoryModel     account.AccountHistoryModel
+	assetModel              asset.AssetModel
+	txPoolModel             tx.TxPoolModel
+	txDetailModel           tx.TxDetailModel
+	txModel                 tx.TxModel
+	blockModel              block.BlockModel
+	compressedBlockModel    compressedblock.CompressedBlockModel
+	blockWitnessModel       blockwitness.BlockWitnessModel
+	proofModel              proof.ProofModel
+	l1SyncedBlockModel      l1syncedblock.L1SyncedBlockModel
+	priorityRequestModel    priorityrequest.PriorityRequestModel
+	l1RollupTModel          l1rolluptx.L1RollupTxModel
+	nftModel                nft.L2NftModel
+	nftHistoryModel         nft.L2NftHistoryModel
+	nftMetadataHistoryModel nft.L2NftMetadataHistoryModel
 }
 
 func Initialize(
@@ -95,22 +96,23 @@ func Initialize(
 	logx.Infof("init configs: %s", string(unmarshal))
 
 	dao := &dao{
-		sysConfigModel:       sysconfig.NewSysConfigModel(db),
-		accountModel:         account.NewAccountModel(db),
-		accountHistoryModel:  account.NewAccountHistoryModel(db),
-		assetModel:           asset.NewAssetModel(db),
-		txPoolModel:          tx.NewTxPoolModel(db),
-		txDetailModel:        tx.NewTxDetailModel(db),
-		txModel:              tx.NewTxModel(db),
-		blockModel:           block.NewBlockModel(db),
-		compressedBlockModel: compressedblock.NewCompressedBlockModel(db),
-		blockWitnessModel:    blockwitness.NewBlockWitnessModel(db),
-		proofModel:           proof.NewProofModel(db),
-		l1SyncedBlockModel:   l1syncedblock.NewL1SyncedBlockModel(db),
-		priorityRequestModel: priorityrequest.NewPriorityRequestModel(db),
-		l1RollupTModel:       l1rolluptx.NewL1RollupTxModel(db),
-		nftModel:             nft.NewL2NftModel(db),
-		nftHistoryModel:      nft.NewL2NftHistoryModel(db),
+		sysConfigModel:          sysconfig.NewSysConfigModel(db),
+		accountModel:            account.NewAccountModel(db),
+		accountHistoryModel:     account.NewAccountHistoryModel(db),
+		assetModel:              asset.NewAssetModel(db),
+		txPoolModel:             tx.NewTxPoolModel(db),
+		txDetailModel:           tx.NewTxDetailModel(db),
+		txModel:                 tx.NewTxModel(db),
+		blockModel:              block.NewBlockModel(db),
+		compressedBlockModel:    compressedblock.NewCompressedBlockModel(db),
+		blockWitnessModel:       blockwitness.NewBlockWitnessModel(db),
+		proofModel:              proof.NewProofModel(db),
+		l1SyncedBlockModel:      l1syncedblock.NewL1SyncedBlockModel(db),
+		priorityRequestModel:    priorityrequest.NewPriorityRequestModel(db),
+		l1RollupTModel:          l1rolluptx.NewL1RollupTxModel(db),
+		nftModel:                nft.NewL2NftModel(db),
+		nftHistoryModel:         nft.NewL2NftHistoryModel(db),
+		nftMetadataHistoryModel: nft.NewL2NftMetadataHistoryModel(db),
 	}
 
 	dropTables(dao)
@@ -246,6 +248,8 @@ func dropTables(dao *dao) {
 	assert.Nil(nil, dao.l1RollupTModel.DropL1RollupTxTable())
 	assert.Nil(nil, dao.nftModel.DropL2NftTable())
 	assert.Nil(nil, dao.nftHistoryModel.DropL2NftHistoryTable())
+	assert.Nil(nil, dao.nftMetadataHistoryModel.DropL2NftMetadataHistoryTable())
+
 }
 
 func initTable(dao *dao, svrConf *contractAddr, bscTestNetworkRPC, localTestNetworkRPC string) {
@@ -265,6 +269,8 @@ func initTable(dao *dao, svrConf *contractAddr, bscTestNetworkRPC, localTestNetw
 	assert.Nil(nil, dao.l1RollupTModel.CreateL1RollupTxTable())
 	assert.Nil(nil, dao.nftModel.CreateL2NftTable())
 	assert.Nil(nil, dao.nftHistoryModel.CreateL2NftHistoryTable())
+	assert.Nil(nil, dao.nftMetadataHistoryModel.CreateL2NftMetadataHistoryTable())
+
 	rowsAffected, err := dao.assetModel.CreateAssets(initAssetsInfo(svrConf.BUSDToken))
 	if err != nil {
 		logx.Severe(err)

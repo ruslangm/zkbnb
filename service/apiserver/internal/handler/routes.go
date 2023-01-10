@@ -169,6 +169,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/v1/accountNfts",
 				Handler: nft.GetAccountNftsHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/getNftByTxHash",
+				Handler: nft.GetNftByTxHashHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/updateNftByIndex",
+				Handler: nft.UpdateNftByIndexHandler(serverCtx),
+			},
 		},
 	)
 }
