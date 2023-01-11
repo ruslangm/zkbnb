@@ -75,4 +75,4 @@ replace (
 
 replace github.com/bnb-chain/zkbnb-smt => github.com/qct/zkbnb-smt v0.0.0-20221203161605-59c0f417b4e8
 
-replace github.com/bnb-chain/zkbnb-crypto => /Users/user/zk/fork/ipfs/zkbnb-crypto
+replace github.com/bnb-chain/zkbnb-crypto => /root/zkbnb-crypto
