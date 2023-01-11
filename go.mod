@@ -3,6 +3,8 @@ module github.com/bnb-chain/zkbnb
 go 1.17
 
 require (
+    github.com/ipfs/go-ipfs-api v0.3.0
+	github.com/ipfs/go-ipfs-files v0.2.0
 	github.com/apolloconfig/agollo/v4 v4.2.1
 	github.com/bnb-chain/zkbnb-go-sdk v1.0.4-0.20221012063144-3a6e84095b4d
 	github.com/dgraph-io/ristretto v0.1.0
