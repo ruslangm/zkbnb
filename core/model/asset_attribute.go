@@ -10,7 +10,7 @@ type AssetAttribute struct {
 	// maximum value
 	// Example: 40
 	// Required: true
-	MaxValue *int64 `json:"maxValue"`
+	MaxValue *int64 `json:"max_value"`
 
 	// name
 	// Example: ratio

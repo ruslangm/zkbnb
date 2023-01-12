@@ -2,6 +2,7 @@ package nft
 
 import (
 	"context"
+	common2 "github.com/bnb-chain/zkbnb/common"
 	"github.com/bnb-chain/zkbnb/dao/nft"
 	types2 "github.com/bnb-chain/zkbnb/types"
 
@@ -25,7 +26,7 @@ func NewUpdateNftByIndexLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 	}
 }
 
-func (l *UpdateNftByIndexLogic) UpdateNftByIndex(req *types.ReqUpdateNft) (resp *types.History, err error) {
+func (l *UpdateNftByIndexLogic) UpdateNftByIndex(req *types.ReqUpdateNft) (*types.History, error) {
 	l2Nft, err := l.svcCtx.NftModel.GetNft(req.NftIndex)
 	if err != nil {
 		if err == types2.DbErrNotFound {
@@ -33,9 +34,18 @@ func (l *UpdateNftByIndexLogic) UpdateNftByIndex(req *types.ReqUpdateNft) (resp 
 		}
 		return nil, types2.AppErrInternal
 	}
+	cid, err := common2.Ipfs.UploadIPNS(req.Mutable)
+	if err != nil {
+		return nil, err
+	}
+	_, err = common2.Ipfs.PublishWithDetails(cid, l2Nft.IpnsName)
+	if err != nil {
+		return nil, err
+	}
 	history := &nft.L2NftMetadataHistory{
 		NftIndex: req.NftIndex,
-		IpnsKey:  l2Nft.IpnsKey,
+		IpnsId:   l2Nft.IpnsId,
+		Cid:      cid,
 		Mutable:  req.Mutable,
 	}
 	err = l.svcCtx.NftMetadataHistoryModel.CreateL2NftMetadataHistoryInTransact(history)

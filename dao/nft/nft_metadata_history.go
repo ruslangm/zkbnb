@@ -41,7 +41,8 @@ type (
 	L2NftMetadataHistory struct {
 		gorm.Model
 		NftIndex int64
-		IpnsKey  string
+		Cid      string
+		IpnsId   string
 		Mutable  string
 	}
 )

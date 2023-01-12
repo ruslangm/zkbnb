@@ -57,7 +57,8 @@ type (
 		CreatorTreasuryRate int64
 		CollectionId        int64
 		L2BlockHeight       int64 `gorm:"index:idx_nft_index"`
-		IpnsKey             string
+		IpnsName            string
+		IpnsId              string
 		Metadata            string
 	}
 )
@@ -145,7 +146,7 @@ func (m *defaultL2NftModel) UpdateNftsInTransact(tx *gorm.DB, nfts []*L2Nft) err
 func (m *defaultL2NftModel) BatchInsertOrUpdate(nfts []*L2Nft) (err error) {
 	dbTx := m.DB.Table(m.table).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_key", "metadata"}),
+		DoUpdates: clause.AssignmentColumns([]string{"creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_name", "ipns_id", "metadata"}),
 	}).Create(&nfts)
 	if dbTx.Error != nil {
 		return dbTx.Error
@@ -166,14 +167,15 @@ func (m *defaultL2NftModel) DeleteByIndexInTransact(tx *gorm.DB, nftIndex int64)
 }
 
 func (m *defaultL2NftModel) UpdateByIndexInTransact(tx *gorm.DB, l2nft *L2Nft) error {
-	dbTx := tx.Model(&L2Nft{}).Select("creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_name", "metadata").Where("nft_index = ?", l2nft.NftIndex).Updates(map[string]interface{}{
+	dbTx := tx.Model(&L2Nft{}).Select("creator_account_index", "owner_account_index", "nft_content_hash", "creator_treasury_rate", "collection_id", "l2_block_height", "ipns_name", "ipns_id", "metadata").Where("nft_index = ?", l2nft.NftIndex).Updates(map[string]interface{}{
 		"creator_account_index": l2nft.CreatorAccountIndex,
 		"owner_account_index":   l2nft.OwnerAccountIndex,
 		"nft_content_hash":      l2nft.NftContentHash,
 		"creator_treasury_rate": l2nft.CreatorTreasuryRate,
 		"collection_id":         l2nft.CollectionId,
 		"l2_block_height":       l2nft.L2BlockHeight,
-		"ipns_key":              l2nft.IpnsKey,
+		"ipns_name":             l2nft.IpnsName,
+		"ipns_id":               l2nft.IpnsId,
 		"metadata":              l2nft.Metadata,
 	})
 	if dbTx.Error != nil {
@@ -209,7 +211,8 @@ func (ai *L2Nft) DeepCopy() *L2Nft {
 		CreatorTreasuryRate: ai.CreatorTreasuryRate,
 		CollectionId:        ai.CollectionId,
 		L2BlockHeight:       ai.L2BlockHeight,
-		IpnsKey:             ai.IpnsKey,
+		IpnsName:            ai.IpnsName,
+		IpnsId:              ai.IpnsId,
 		Metadata:            ai.Metadata,
 	}
 	return l2Nft

@@ -13,9 +13,11 @@ import (
 	"github.com/bnb-chain/zkbnb/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-openapi/swag"
+	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 	"github.com/zeromicro/go-zero/core/logx"
 	"k8s.io/kube-openapi/pkg/validation/validate"
+	"strings"
 )
 
 type MintNftExecutor struct {
@@ -45,22 +47,34 @@ func (e *MintNftExecutor) Prepare() error {
 	txInfo.NftIndex = nextNftIndex
 
 	if !e.bc.StateDB().DryRun {
-		//key, err := common2.Ipfs.GenerateIPNS(txInfo.NftIndex)
-		//if err != nil {
-		//	return err
-		//}
-		ipfsHexCid, err := sendToIpfs(&nftModels.NftMetaData{
+		id, err := uuid.NewV4()
+		if err != nil {
+			return err
+		}
+		ids := id.String()
+		ipnsName := fmt.Sprintf("%s-%d", ids, txInfo.NftIndex)
+		ipnsId, err := common2.Ipfs.GenerateIPNS(ipnsName)
+		if err != nil {
+			return err
+		}
+		cid, err := sendToIpfs(&nftModels.NftMetaData{
 			Image:       e.txInfo.MetaData.Image,
 			Name:        e.txInfo.MetaData.Name,
 			Description: e.txInfo.MetaData.Description,
 			Attributes:  e.txInfo.MetaData.Attributes,
-			Ipns:        "",
+			Ipns:        fmt.Sprintf("%s%s", "https://ipfs.io/ipns/", ipnsId.Id),
 		}, e.txInfo.NftIndex)
 		if err != nil {
 			return err
 		}
-		e.txInfo.NftContentHash = ipfsHexCid
-		e.txInfo.IpnsKey = ""
+		hash, err := common2.Ipfs.GenerateHash(cid)
+		if err != nil {
+			return err
+		}
+		txInfo.NftContentHash = hash
+		txInfo.IpnsName = ipnsName
+		txInfo.IpnsId = ipnsId.Id
+
 	}
 	// Mark the tree states that would be affected in this executor.
 	e.MarkNftDirty(txInfo.NftIndex)
@@ -131,7 +145,8 @@ func (e *MintNftExecutor) ApplyTransaction() error {
 		NftContentHash:      txInfo.NftContentHash,
 		CreatorTreasuryRate: txInfo.CreatorTreasuryRate,
 		CollectionId:        txInfo.NftCollectionId,
-		IpnsKey:             txInfo.IpnsKey,
+		IpnsName:            txInfo.IpnsName,
+		IpnsId:              txInfo.IpnsId,
 		Metadata:            string(bm),
 	})
 	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
@@ -368,7 +383,7 @@ func (e *MintNftExecutor) validateAttribute() error {
 			continue
 		}
 		if result[i] != nil {
-			if *result[i].Name == "Properties" {
+			if strings.ToLower(*result[i].Name) == "properties" {
 				if err := result[i].ValidateValue(); err != nil {
 					res = append(res, err)
 				}

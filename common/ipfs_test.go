@@ -134,7 +134,7 @@ func TestPublish(t *testing.T) {
 }
 
 func TestCid(t *testing.T) {
-	var hash = "0x1220" + "90ba66b30af6928ec12db9c0551b5990a192bd9c1ac97ed2419c48c595c04a67"
+	var hash = "0x1220" + "6607f2239c2d623330f788e6758d311d465de1ab61215de47fa8e14ad90ecf4e"
 	b, _ := hexutil.Decode(hash)
 	cid := base58.Encode(b)
 	fmt.Println(cid)
