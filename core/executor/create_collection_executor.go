@@ -210,13 +210,21 @@ func (e *CreateCollectionExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 }
 
 func (e *CreateCollectionExecutor) Validate() error {
-	var res []error
+	if err := validate.Required("MetaData", "body", e.txInfo.MetaData); err != nil {
+		return err
+	}
 
-	if err := e.validateBannerImage(); err != nil {
+	var res []error
+	// Mandatory
+	if err := e.validateCategoryID(); err != nil {
+		res = append(res, err)
+	}
+	if err := e.validateShortname(); err != nil {
 		res = append(res, err)
 	}
 
-	if err := e.validateCategoryID(); err != nil {
+	// Not mandatory
+	if err := e.validateBannerImage(); err != nil {
 		res = append(res, err)
 	}
 
