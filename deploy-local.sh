@@ -40,8 +40,8 @@ git clone --branch ipfs https://github.com/15000785133/zkbnb-crypto.git
 cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
 
 
-flag=$1
-if [ $flag = "new" ]; then
+#flag=$1
+#if [ $flag = "new" ]; then
   echo "new crypto env"
   echo '2. start generate zkbnb.vk and zkbnb.pk'
   cd ${DEPLOY_PATH}
@@ -49,7 +49,7 @@ if [ $flag = "new" ]; then
   cd ${DEPLOY_PATH}
   mkdir -p $KEY_PATH
   cp -r ./zkbnb-crypto/circuit/solidity/* $KEY_PATH
-fi
+#fi
 
 
 
@@ -219,7 +219,7 @@ BlockConfig:
   OptionalBlockSizes: [10]
 
 IpfsUrl:
-  10.23.34.36:5001
+  10.23.23.40:5001
 
 TreeDB:
   Driver: memorydb
@@ -257,6 +257,9 @@ ChainConfig:
   Sk: "${BSC_TESTNET_PRIVATE_KEY}"
   GasLimit: 5000000
   GasPrice: 0
+
+IpfsUrl:
+  10.23.23.40:5001
 
 TreeDB:
   Driver: memorydb
@@ -302,9 +305,6 @@ LogConf:
 CoinMarketCap:
   Url: https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=
   Token: ${CMC_TOKEN}
-
-IpfsUrl:
-  10.23.34.36:5001
 
 MemCache:
   AccountExpiration: 200

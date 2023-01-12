@@ -26,11 +26,18 @@ const (
 	L2NftMetadataHistoryTableName = `l2_nft_metadata_history`
 )
 
+const (
+	NotConfirmed = iota
+	Confirmed
+)
+
 type (
 	L2NftMetadataHistoryModel interface {
 		CreateL2NftMetadataHistoryTable() error
 		DropL2NftMetadataHistoryTable() error
 		CreateL2NftMetadataHistoryInTransact(metadata *L2NftMetadataHistory) error
+		GetL2NftMetadataHistory() (history []*L2NftMetadataHistory, err error)
+		UpdateL2NftMetadataHistoryInTransact(history *L2NftMetadataHistory) error
 	}
 
 	defaultL2NftMetadataHistoryModel struct {
@@ -42,8 +49,10 @@ type (
 		gorm.Model
 		NftIndex int64
 		Cid      string
+		IpnsName string
 		IpnsId   string
 		Mutable  string
+		Status   int64
 	}
 )
 
@@ -72,6 +81,25 @@ func (m *defaultL2NftMetadataHistoryModel) CreateL2NftMetadataHistoryInTransact(
 	}
 	if dbTx.RowsAffected == 0 {
 		return types.DbErrFailToCreateProof
+	}
+	return nil
+}
+
+func (m *defaultL2NftMetadataHistoryModel) GetL2NftMetadataHistory() (history []*L2NftMetadataHistory, err error) {
+	dbTx := m.DB.Table(m.table).Where("status = ?", NotConfirmed).
+		Limit(500).Order("id asc").Find(&history)
+	if dbTx.Error != nil {
+		return nil, types.DbErrSqlOperation
+	} else if dbTx.RowsAffected == 0 {
+		return nil, types.DbErrNotFound
+	}
+	return history, nil
+}
+
+func (m *defaultL2NftMetadataHistoryModel) UpdateL2NftMetadataHistoryInTransact(history *L2NftMetadataHistory) error {
+	dbTx := m.DB.Model(&history).Select("cid", "status").Updates(history)
+	if dbTx.Error != nil {
+		return types.DbErrSqlOperation
 	}
 	return nil
 }

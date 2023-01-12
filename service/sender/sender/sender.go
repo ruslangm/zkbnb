@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bnb-chain/zkbnb/common"
+	"github.com/bnb-chain/zkbnb/dao/nft"
 	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/plugin/dbresolver"
 	"math"
@@ -109,12 +111,13 @@ type Sender struct {
 	zkbnbInstance *zkbnb.ZkBNB
 
 	// Data access objects
-	db                   *gorm.DB
-	blockModel           block.BlockModel
-	compressedBlockModel compressedblock.CompressedBlockModel
-	l1RollupTxModel      l1rolluptx.L1RollupTxModel
-	sysConfigModel       sysconfig.SysConfigModel
-	proofModel           proof.ProofModel
+	db                        *gorm.DB
+	blockModel                block.BlockModel
+	compressedBlockModel      compressedblock.CompressedBlockModel
+	l1RollupTxModel           l1rolluptx.L1RollupTxModel
+	sysConfigModel            sysconfig.SysConfigModel
+	proofModel                proof.ProofModel
+	l2NftMetadataHistoryModel nft.L2NftMetadataHistoryModel
 }
 
 func NewSender(c sconfig.Config) *Sender {
@@ -164,20 +167,21 @@ func NewSender(c sconfig.Config) *Sender {
 	if err := prometheus.Register(contractBalanceMetric); err != nil {
 		logx.Errorf("prometheus.Register contractBalanceMetric error: %v", err)
 	}
-
+	common.NewIPFS(c.IpfsUrl)
 	db.Use(dbresolver.Register(dbresolver.Config{
 		Sources:  []gorm.Dialector{postgres.Open(masterDataSource)},
 		Replicas: []gorm.Dialector{postgres.Open(slaveDataSource)},
 	}))
 
 	s := &Sender{
-		config:               c,
-		db:                   db,
-		blockModel:           block.NewBlockModel(db),
-		compressedBlockModel: compressedblock.NewCompressedBlockModel(db),
-		l1RollupTxModel:      l1rolluptx.NewL1RollupTxModel(db),
-		sysConfigModel:       sysconfig.NewSysConfigModel(db),
-		proofModel:           proof.NewProofModel(db),
+		config:                    c,
+		db:                        db,
+		blockModel:                block.NewBlockModel(db),
+		compressedBlockModel:      compressedblock.NewCompressedBlockModel(db),
+		l1RollupTxModel:           l1rolluptx.NewL1RollupTxModel(db),
+		sysConfigModel:            sysconfig.NewSysConfigModel(db),
+		proofModel:                proof.NewProofModel(db),
+		l2NftMetadataHistoryModel: nft.NewL2NftMetadataHistoryModel(db),
 	}
 
 	l1RPCEndpoint, err := s.sysConfigModel.GetSysConfigByName(c.ChainConfig.NetworkRPCSysConfigName)
@@ -514,6 +518,33 @@ func (s *Sender) VerifyAndExecuteBlocks() (err error) {
 	}
 	l2BlockSubmitToVerifyHeightMetric.Set(float64(newRollupTx.L2BlockHeight))
 	logx.Infof("new blocks have been verified and executed(height): %d:%s", newRollupTx.L2BlockHeight, newRollupTx.L1TxHash)
+	return nil
+}
+
+func (s *Sender) SendIpns() error {
+	histories, err := s.l2NftMetadataHistoryModel.GetL2NftMetadataHistory()
+	if err != nil {
+		if err == types.DbErrNotFound {
+			return nil
+		}
+		return err
+	}
+	for _, hostory := range histories {
+		cid, err := common.Ipfs.UploadIPNS(hostory.Mutable)
+		if err != nil {
+			return err
+		}
+		_, err = common.Ipfs.PublishWithDetails(cid, hostory.IpnsName)
+		if err != nil {
+			return err
+		}
+		hostory.Status = nft.Confirmed
+		hostory.Cid = cid
+		err = s.l2NftMetadataHistoryModel.UpdateL2NftMetadataHistoryInTransact(hostory)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

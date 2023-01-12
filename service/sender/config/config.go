@@ -18,5 +18,6 @@ type Config struct {
 		GasLimit                uint64
 		GasPrice                uint64
 	}
+	IpfsUrl string
 	LogConf logx.LogConf
 }

@@ -1,7 +1,6 @@
 package svc
 
 import (
-	"github.com/bnb-chain/zkbnb/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/plugin/dbresolver"
 	"time"
@@ -103,7 +102,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.Error("prometheus.Register sendTxTotalMetrics error: %v", err)
 		return nil
 	}
-	common.NewIPFS(c.IpfsUrl)
 	return &ServiceContext{
 		Config:                  c,
 		RedisCache:              redisCache,

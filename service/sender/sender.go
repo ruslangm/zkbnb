@@ -62,6 +62,18 @@ func Run(configFile string) error {
 		panic(err)
 	}
 
+	_, err = cronJob.AddFunc("@every 10s", func() {
+		logx.Info("========================= send message to ipns =========================")
+		err = s.SendIpns()
+		if err != nil {
+			logx.Severef("failed to send message to ipns, %v", err)
+		}
+	})
+	if err != nil {
+		logx.Severe(err)
+		panic(err)
+	}
+
 	cronJob.Start()
 
 	exit := make(chan struct{})

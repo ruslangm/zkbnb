@@ -2,7 +2,6 @@ package nft
 
 import (
 	"context"
-	common2 "github.com/bnb-chain/zkbnb/common"
 	"github.com/bnb-chain/zkbnb/dao/nft"
 	types2 "github.com/bnb-chain/zkbnb/types"
 
@@ -34,19 +33,12 @@ func (l *UpdateNftByIndexLogic) UpdateNftByIndex(req *types.ReqUpdateNft) (*type
 		}
 		return nil, types2.AppErrInternal
 	}
-	cid, err := common2.Ipfs.UploadIPNS(req.Mutable)
-	if err != nil {
-		return nil, err
-	}
-	_, err = common2.Ipfs.PublishWithDetails(cid, l2Nft.IpnsName)
-	if err != nil {
-		return nil, err
-	}
 	history := &nft.L2NftMetadataHistory{
 		NftIndex: req.NftIndex,
+		IpnsName: l2Nft.IpnsName,
 		IpnsId:   l2Nft.IpnsId,
-		Cid:      cid,
 		Mutable:  req.Mutable,
+		Status:   nft.NotConfirmed,
 	}
 	err = l.svcCtx.NftMetadataHistoryModel.CreateL2NftMetadataHistoryInTransact(history)
 	if err != nil {
