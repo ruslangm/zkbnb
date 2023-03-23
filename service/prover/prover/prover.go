@@ -3,6 +3,7 @@ package prover
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bnb-chain/zkbnb/dao/tx"
 	"github.com/prometheus/client_golang/prometheus"
 	"time"
 
@@ -45,6 +46,7 @@ type Prover struct {
 	DB                *gorm.DB
 	ProofModel        proof.ProofModel
 	BlockWitnessModel blockwitness.BlockWitnessModel
+	TxModel           tx.TxModel
 
 	VerifyingKeys      []groth16.VerifyingKey
 	ProvingKeys        [][]groth16.ProvingKey
@@ -64,6 +66,11 @@ var (
 		Namespace: "zkbnb",
 		Name:      "proof_generate_time",
 		Help:      "proof_generate_time metrics.",
+	})
+	proofProcessFromWitnessTimeMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "proof_process_time_from_witness",
+		Help:      "proof_process_time_from_witness metrics.",
 	})
 )
 
@@ -95,6 +102,9 @@ func NewProver(c config.Config) (*Prover, error) {
 	}
 	if err := prometheus.Register(proofGenerateTimeMetric); err != nil {
 		return nil, fmt.Errorf("prometheus.Register proofGenerateTimeMetric error: %v", err)
+	}
+	if err := prometheus.Register(proofProcessFromWitnessTimeMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register proofProcessFromWitnessTimeMetric error: %v", err)
 	}
 
 	masterDataSource := c.Postgres.MasterDataSource
@@ -269,6 +279,7 @@ func (p *Prover) ProveBlock() error {
 	if err != nil {
 		return fmt.Errorf("unable to format blockProof: %v", err)
 	}
+	blockFinishedTime := time.Now()
 
 	// Marshal formatted proof.
 	proofBytes, err := json.Marshal(formattedProof)
@@ -282,6 +293,7 @@ func (p *Prover) ProveBlock() error {
 		logx.Errorf("blockProof of height %d exists", blockWitness.Height)
 		return nil
 	}
+	proofProcessFromWitnessTimeMetric.Set(float64(blockFinishedTime.Sub(blockWitness.CreatedAt).Milliseconds()))
 
 	var row = &proof.Proof{
 		ProofInfo:   string(proofBytes),

@@ -187,6 +187,7 @@ require (
 )
 
 replace (
+	github.com/bnb-chain/zkbnb-crypto => github.com/ruslangm/zkbnb-crypto v0.0.8-0.20230323045259-687d06dc1d61
 	github.com/bnb-chain/zkbnb-eth-rpc => github.com/tengwei/zkbnb-eth-rpc v0.0.3-0.20230220151053-0d1227dac349
 	github.com/bnb-chain/zkbnb-smt => github.com/qct/zkbnb-smt v0.0.0-20230116124655-bad4d92a74f1
 	github.com/consensys/gnark => github.com/ruslangm/gnark v0.7.1-0.20230301160822-536fa6f95f0e
