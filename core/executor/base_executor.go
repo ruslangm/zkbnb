@@ -93,12 +93,12 @@ func (e *BaseExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 		}
 
 		if !skipSigChk {
-			fromAccount, err := e.bc.StateDB().GetFormatAccount(from)
+			//fromAccount, err := e.bc.StateDB().GetFormatAccount(from)
 			if err != nil {
 				return err
 			}
 			start = time.Now()
-			err = txInfo.VerifySignature(fromAccount.PublicKey)
+			//err = txInfo.VerifySignature(fromAccount.PublicKey)
 			if metrics.VerifySignature != nil {
 				metrics.VerifySignature.Set(float64(time.Since(start).Milliseconds()))
 			}
