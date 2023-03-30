@@ -14,11 +14,11 @@ ZkBNB_REPO_PATH=$(cd `dirname $0`; pwd)
 CMC_TOKEN=cfce503f-fake-fake-fake-bbab5257dac8
 NETWORK_RPC_SYS_CONFIG_NAME=LocalTestNetworkRpc # BscTestNetworkRpc or LocalTestNetworkRpc
 BSC_TESTNET_RPC=HTTP://127.0.0.1:8545
-BSC_TESTNET_PRIVATE_KEY=2d92239525b6632b963f49d28411596512fab69052a1738e530a59617e433b81
+BSC_TESTNET_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 #use COMMIT_BLOCK_PRIVATE_KEY for submitting commit_block to bnb contract in sender application
 #use VERIFY_BLOCK_PRIVATE_KEY for submitting verify_block to bnb contract in sender application
-COMMIT_BLOCK_PRIVATE_KEY=
-VERIFY_BLOCK_PRIVATE_KEY=
+COMMIT_BLOCK_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+VERIFY_BLOCK_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 # security Council Members for upgrade approve
 # FOR TEST
 # generage by Mnemonic (account #17 ~ #19): giggle federal note disorder will close traffic air melody artefact taxi tissue
@@ -27,7 +27,7 @@ SECURITY_COUNCIL_MEMBERS_NUMBER_2=0x0000000000000000000000000000000000000000
 SECURITY_COUNCIL_MEMBERS_NUMBER_3=0x0000000000000000000000000000000000000000
 # validator config, split by `,` the address of COMMIT_BLOCK_PRIVATE_KEY  and the address of VERIFY_BLOCK_PRIVATE_KEY,
 VALIDATORS=
-ZKBNB_OPTIONAL_BLOCK_SIZES=1,10
+ZKBNB_OPTIONAL_BLOCK_SIZES=1
 
 export PATH=$PATH:/usr/local/go/bin:/usr/local/go/bin:/root/go/bin
 echo '0. stop old database/redis and docker run new database/redis'
@@ -47,8 +47,8 @@ export PATH=$PATH:/usr/local/go/bin/
 cd ~
 rm -rf ${DEPLOY_PATH}-bak && mv ${DEPLOY_PATH} ${DEPLOY_PATH}-bak
 mkdir -p ${DEPLOY_PATH} && cd ${DEPLOY_PATH}
-git clone --branch testnet  https://github.com/bnb-chain/zkbnb-contract.git
-git clone --branch testnet https://github.com/bnb-chain/zkbnb-crypto.git
+git clone --branch bugfix/gnark-crypto-version  https://github.com/ruslangm/zkbnb-contract.git
+git clone --branch feat/sha256-v0.8.0-load-opt https://github.com/ruslangm/zkbnb-crypto.git
 cp -r ${ZkBNB_REPO_PATH} ${DEPLOY_PATH}
 
 
@@ -322,6 +322,13 @@ LogConf:
   Path: ./log/api-server
   StackCooldownMillis: 500
   Level: error
+
+Apollo:
+  AppID:             zkbnb-cloud
+  Cluster:           prod
+  ApolloIp:          http://internal-tf-cm-test-apollo-config-alb-2119591301.ap-northeast-1.elb.amazonaws.com:9028
+  Namespace:         application
+  IsBackupConfig:    true
 
 IpfsUrl:
   10.23.23.40:5001
