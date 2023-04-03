@@ -937,8 +937,8 @@ github.com/rs/zerolog v1.13.0/go.mod h1:YbFCdg8HfsridGWAh22vktObvhZbQsZXe4/zB0OK
 github.com/rs/zerolog v1.15.0/go.mod h1:xYTKnLHcpfU2225ny5qZjxnj9NvkumZYjJHlAThCjNc=
 github.com/rs/zerolog v1.29.0 h1:Zes4hju04hjbvkVkOhdl2HpZa+0PmVwigmo8XoORE5w=
 github.com/rs/zerolog v1.29.0/go.mod h1:NILgTygv/Uej1ra5XxGf82ZFSLk58MFGAUS2o6usyD0=
-github.com/ruslangm/zkbnb-crypto v0.0.8-0.20230331124326-dffc71ec6fa7 h1:9iqKMc3k+hhJ3OJm8Dvm1wuvWWYQ48In4/fpCohBHMg=
-github.com/ruslangm/zkbnb-crypto v0.0.8-0.20230331124326-dffc71ec6fa7/go.mod h1:2L8DIo92Eh5YEVbQoU2cZ9avWrPnRkRV4GZNvt0jDmI=
+github.com/ruslangm/zkbnb-crypto v0.0.8-0.20230403140522-a13b046821d2 h1:VOysATrpFR3pebL0StM753NDaCXb7urI0Ka5mid8ZB8=
+github.com/ruslangm/zkbnb-crypto v0.0.8-0.20230403140522-a13b046821d2/go.mod h1:sCy4Twh+kJNxYR3TVbGVlLRkUDBIeyeiiuoXwjsVQKM=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf35Ld67mk=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
