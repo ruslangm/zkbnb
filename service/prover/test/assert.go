@@ -17,10 +17,8 @@ limitations under the License.
 package test
 
 import (
-	"errors"
 	"fmt"
-	"github.com/consensys/gnark/constraint"
-	"github.com/consensys/gnark/frontend/schema"
+	"github.com/bnb-chain/zkbnb/types"
 	"reflect"
 	"strings"
 	"testing"
@@ -32,21 +30,17 @@ import (
 	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/compiled"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"github.com/consensys/gnark/frontend/cs/scs"
 	"github.com/stretchr/testify/require"
-)
-
-var (
-	ErrCompilationNotDeterministic = errors.New("compilation is not deterministic")
-	ErrInvalidWitnessSolvedCS      = errors.New("invalid witness solved the constraint system")
-	ErrInvalidWitnessVerified      = errors.New("invalid witness resulted in a valid proof")
 )
 
 // Assert is a helper to test circuits
 type Assert struct {
 	t *testing.T
 	*require.Assertions
-	compiled map[string]constraint.ConstraintSystem // cache compilation
+	compiled map[string]frontend.CompiledConstraintSystem // cache compilation
 }
 
 // NewAssert returns an Assert helper embedding a testify/require object for convenience
@@ -56,7 +50,7 @@ type Assert struct {
 // the first call to assert.ProverSucceeded/Failed will compile the circuit for n curves, m backends
 // and subsequent calls will re-use the result of the compilation, if available.
 func NewAssert(t *testing.T) *Assert {
-	return &Assert{t: t, Assertions: require.New(t), compiled: make(map[string]constraint.ConstraintSystem)}
+	return &Assert{t: t, Assertions: require.New(t), compiled: make(map[string]frontend.CompiledConstraintSystem)}
 }
 
 // Run runs the test function fn as a subtest. The subtest is parametrized by
@@ -94,29 +88,29 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 	for _, curve := range opt.curves {
 		curve := curve
 		// parse the assignment and instantiate the witness
-		validWitness, err := frontend.NewWitness(validAssignment, curve.ScalarField())
+		validWitness, err := frontend.NewWitness(validAssignment, curve)
 		assert.NoError(err, "can't parse valid assignment")
 
-		validPublicWitness, err := frontend.NewWitness(validAssignment, curve.ScalarField(), frontend.PublicOnly())
+		validPublicWitness, err := frontend.NewWitness(validAssignment, curve, frontend.PublicOnly())
 		assert.NoError(err, "can't parse valid assignment")
 
 		if opt.witnessSerialization {
 			// do a round trip marshalling test
 			assert.Run(func(assert *Assert) {
 				assert.t.Parallel()
-				assert.marshalWitness(validWitness, curve, false)
+				assert.marshalWitness(validWitness, curve, JSON)
 			}, curve.String(), "marshal/json")
 			assert.Run(func(assert *Assert) {
 				assert.t.Parallel()
-				assert.marshalWitness(validWitness, curve, false)
+				assert.marshalWitness(validWitness, curve, Binary)
 			}, curve.String(), "marshal/binary")
 			assert.Run(func(assert *Assert) {
 				assert.t.Parallel()
-				assert.marshalWitness(validPublicWitness, curve, true)
+				assert.marshalWitness(validPublicWitness, curve, JSON, frontend.PublicOnly())
 			}, curve.String(), "marshal-public/json")
 			assert.Run(func(assert *Assert) {
 				assert.t.Parallel()
-				assert.marshalWitness(validPublicWitness, curve, true)
+				assert.marshalWitness(validPublicWitness, curve, Binary, frontend.PublicOnly())
 			}, curve.String(), "marshal-public/binary")
 		}
 
@@ -125,14 +119,14 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 			b := b
 			assert.Run(func(assert *Assert) {
 
-				checkError := func(err error) { assert.checkError(err, b, curve, validWitness, lazySchema(circuit)) }
+				checkError := func(err error) { assert.checkError(err, b, curve, validWitness) }
 
 				// 1- compile the circuit
 				ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 				checkError(err)
 
 				// must not error with big int test engine (only the curveID is needed for this test)
-				err = IsSolved(circuit, validAssignment, curve.ScalarField())
+				err = IsSolved(circuit, validAssignment, curve, backend.UNKNOWN)
 				checkError(err)
 
 				assert.t.Parallel()
@@ -193,9 +187,9 @@ func (assert *Assert) ProverFailed(circuit frontend.Circuit, invalidAssignment f
 	for _, curve := range opt.curves {
 
 		// parse assignment
-		invalidWitness, err := frontend.NewWitness(invalidAssignment, curve.ScalarField())
+		invalidWitness, err := frontend.NewWitness(invalidAssignment, curve)
 		assert.NoError(err, "can't parse invalid assignment")
-		invalidPublicWitness, err := frontend.NewWitness(invalidAssignment, curve.ScalarField(), frontend.PublicOnly())
+		invalidPublicWitness, err := frontend.NewWitness(invalidAssignment, curve, frontend.PublicOnly())
 		assert.NoError(err, "can't parse invalid assignment")
 
 		for _, b := range opt.backends {
@@ -203,15 +197,15 @@ func (assert *Assert) ProverFailed(circuit frontend.Circuit, invalidAssignment f
 			b := b
 			assert.Run(func(assert *Assert) {
 
-				checkError := func(err error) { assert.checkError(err, b, curve, invalidWitness, lazySchema(circuit)) }
-				mustError := func(err error) { assert.mustError(err, b, curve, invalidWitness, lazySchema(circuit)) }
+				checkError := func(err error) { assert.checkError(err, b, curve, invalidWitness) }
+				mustError := func(err error) { assert.mustError(err, b, curve, invalidWitness) }
 
 				// 1- compile the circuit
 				ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 				checkError(err)
 
 				// must error with big int test engine (only the curveID is needed here)
-				err = IsSolved(circuit, invalidAssignment, curve.ScalarField())
+				err = IsSolved(circuit, invalidAssignment, curve, backend.UNKNOWN)
 				mustError(err)
 
 				assert.t.Parallel()
@@ -264,17 +258,17 @@ func (assert *Assert) SolvingSucceeded(circuit frontend.Circuit, validWitness fr
 
 func (assert *Assert) solvingSucceeded(circuit frontend.Circuit, validAssignment frontend.Circuit, b backend.ID, curve ecc.ID, opt *testingConfig) {
 	// parse assignment
-	validWitness, err := frontend.NewWitness(validAssignment, curve.ScalarField())
+	validWitness, err := frontend.NewWitness(validAssignment, curve)
 	assert.NoError(err, "can't parse valid assignment")
 
-	checkError := func(err error) { assert.checkError(err, b, curve, validWitness, lazySchema(circuit)) }
+	checkError := func(err error) { assert.checkError(err, b, curve, validWitness) }
 
 	// 1- compile the circuit
 	ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 	checkError(err)
 
 	// must not error with big int test engine
-	err = IsSolved(circuit, validAssignment, curve.ScalarField())
+	err = IsSolved(circuit, validAssignment, curve, b)
 	checkError(err)
 
 	err = ccs.IsSolved(validWitness, opt.proverOpts...)
@@ -296,36 +290,47 @@ func (assert *Assert) SolvingFailed(circuit frontend.Circuit, invalidWitness fro
 	}
 }
 
-func lazySchema(circuit frontend.Circuit) func() *schema.Schema {
-	return func() *schema.Schema {
-		// we only parse the schema if we need to display the witness in json.
-		s, err := schema.New(circuit, tVariable)
-		if err != nil {
-			panic("couldn't parse schema from circuit: " + err.Error())
-		}
-		return s
-	}
-}
-
 func (assert *Assert) solvingFailed(circuit frontend.Circuit, invalidAssignment frontend.Circuit, b backend.ID, curve ecc.ID, opt *testingConfig) {
 	// parse assignment
-	invalidWitness, err := frontend.NewWitness(invalidAssignment, curve.ScalarField())
+	invalidWitness, err := frontend.NewWitness(invalidAssignment, curve)
 	assert.NoError(err, "can't parse invalid assignment")
 
-	checkError := func(err error) { assert.checkError(err, b, curve, invalidWitness, lazySchema(circuit)) }
-	mustError := func(err error) { assert.mustError(err, b, curve, invalidWitness, lazySchema(circuit)) }
+	checkError := func(err error) { assert.checkError(err, b, curve, invalidWitness) }
+	mustError := func(err error) { assert.mustError(err, b, curve, invalidWitness) }
 
 	// 1- compile the circuit
 	ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 	checkError(err)
 
 	// must error with big int test engine
-	err = IsSolved(circuit, invalidAssignment, curve.ScalarField())
+	err = IsSolved(circuit, invalidAssignment, curve, b)
 	mustError(err)
 
 	err = ccs.IsSolved(invalidWitness, opt.proverOpts...)
 	mustError(err)
 
+}
+
+// GetCounters compiles (or fetch from the compiled circuit cache) the circuit with set backends and curves
+// and returns measured counters
+func (assert *Assert) GetCounters(circuit frontend.Circuit, opts ...TestingOption) []compiled.Counter {
+	//opt := assert.options(opts...)
+	//
+	//var r []compiled.Counter
+
+	//for _, curve := range opt.curves {
+	//	for _, b := range opt.backends {
+	//		curve := curve
+	//		b := b
+	//		//assert.Run(func(assert *Assert) {
+	//		//	ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
+	//		//	assert.NoError(err)
+	//		//	r = append(r, ccs.GetCounters()...)
+	//		//}, curve.String(), b.String())
+	//	}
+	//}
+
+	return nil
 }
 
 // Fuzz fuzzes the given circuit by instantiating "randomized" witnesses and cross checking
@@ -372,7 +377,7 @@ func (assert *Assert) fuzzer(fuzzer filler, circuit, w frontend.Circuit, b backe
 	// fuzz a witness
 	fuzzer(w, curve)
 
-	err := IsSolved(circuit, w, curve.ScalarField())
+	err := IsSolved(circuit, w, curve, b)
 
 	if err == nil {
 		// valid witness
@@ -388,13 +393,13 @@ func (assert *Assert) fuzzer(fuzzer filler, circuit, w frontend.Circuit, b backe
 func (assert *Assert) getCircuitAddr(circuit frontend.Circuit) (uintptr, error) {
 	vCircuit := reflect.ValueOf(circuit)
 	if vCircuit.Kind() != reflect.Ptr {
-		return 0, errors.New("frontend.Circuit methods must be defined on pointer receiver")
+		return 0, types.AppErrCircuitMethodDefErr
 	}
 	return vCircuit.Pointer(), nil
 }
 
 // compile the given circuit for given curve and backend, if not already present in cache
-func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendID backend.ID, compileOpts []frontend.CompileOption) (constraint.ConstraintSystem, error) {
+func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendID backend.ID, compileOpts []frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
 	addr, err := assert.getCircuitAddr(circuit)
 	if err != nil {
 		return nil, err
@@ -412,23 +417,25 @@ func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendI
 	switch backendID {
 	case backend.GROTH16:
 		newBuilder = r1cs.NewBuilder
+	case backend.PLONK:
+		newBuilder = scs.NewBuilder
 	default:
 		panic("not implemented")
 	}
 
 	// else compile it and ensure it is deterministic
-	ccs, err := frontend.Compile(curveID.ScalarField(), newBuilder, circuit, compileOpts...)
+	ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	_ccs, err := frontend.Compile(curveID.ScalarField(), newBuilder, circuit, compileOpts...)
+	_ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCompilationNotDeterministic, err)
+		return nil, fmt.Errorf("%w: %v", types.AppErrCompilationNotDeterministic, err)
 	}
 
 	if !reflect.DeepEqual(ccs, _ccs) {
-		return nil, ErrCompilationNotDeterministic
+		return nil, types.AppErrCompilationNotDeterministic
 	}
 
 	// // add the compiled circuit to the cache
@@ -459,14 +466,13 @@ func (assert *Assert) options(opts ...TestingOption) testingConfig {
 	return opt
 }
 
-// ensure the error is nil, else fails the test
 // ensure the error is set, else fails the test
-func (assert *Assert) mustError(err error, backendID backend.ID, curve ecc.ID, w witness.Witness, lazyS func() *schema.Schema) {
+func (assert *Assert) mustError(err error, backendID backend.ID, curve ecc.ID, witness *witness.Witness) {
 	if err != nil {
 		return
 	}
 	var json string
-	bjson, err := w.ToJSON(lazyS())
+	bjson, err := witness.MarshalJSON()
 	if err != nil {
 		json = err.Error()
 	} else {
@@ -478,7 +484,7 @@ func (assert *Assert) mustError(err error, backendID backend.ID, curve ecc.ID, w
 }
 
 // ensure the error is nil, else fails the test
-func (assert *Assert) checkError(err error, backendID backend.ID, curve ecc.ID, w witness.Witness, lazyS func() *schema.Schema) {
+func (assert *Assert) checkError(err error, backendID backend.ID, curve ecc.ID, witness *witness.Witness) {
 	if err == nil {
 		return
 	}
@@ -486,7 +492,7 @@ func (assert *Assert) checkError(err error, backendID backend.ID, curve ecc.ID, 
 	var json string
 	e := fmt.Errorf("%s(%s): %w", backendID.String(), curve.String(), err)
 
-	bjson, err := w.ToJSON(lazyS())
+	bjson, err := witness.MarshalJSON()
 	if err != nil {
 		json = err.Error()
 	} else {
@@ -511,23 +517,26 @@ func (m marshaller) String() string {
 	return "Binary"
 }
 
-func (assert *Assert) marshalWitness(w witness.Witness, curveID ecc.ID, publicOnly bool) {
-	// serialize the vector to binary
-	var err error
-	if publicOnly {
-		w, err = w.Public()
-		assert.NoError(err)
+func (assert *Assert) marshalWitness(w *witness.Witness, curveID ecc.ID, m marshaller, opts ...frontend.WitnessOption) {
+	marshal := w.MarshalBinary
+	if m == JSON {
+		marshal = w.MarshalJSON
 	}
-	data, err := w.MarshalBinary()
+
+	// serialize the vector to binary
+	data, err := marshal()
 	assert.NoError(err)
 
 	// re-read
-	witness, err := witness.New(curveID.ScalarField())
-	assert.NoError(err)
-	err = witness.UnmarshalBinary(data)
+	witness := witness.Witness{CurveID: curveID, Schema: w.Schema}
+	unmarshal := witness.UnmarshalBinary
+	if m == JSON {
+		unmarshal = witness.UnmarshalJSON
+	}
+	err = unmarshal(data)
 	assert.NoError(err)
 
-	witnessMatch := reflect.DeepEqual(w, witness)
+	witnessMatch := reflect.DeepEqual(*w, witness)
 
 	if !witnessMatch {
 		assert.Log("original json", string(data))
@@ -535,5 +544,5 @@ func (assert *Assert) marshalWitness(w witness.Witness, curveID ecc.ID, publicOn
 		// assert.Log("reconstructed vector", witness.Vector)
 	}
 
-	assert.True(witnessMatch, "round trip marshaling failed")
+	assert.True(witnessMatch, m.String()+" round trip marshaling failed")
 }
