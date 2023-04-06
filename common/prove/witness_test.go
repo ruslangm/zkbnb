@@ -29,7 +29,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/bnb-chain/zkbnb-crypto/circuit"
-	"github.com/bnb-chain/zkbnb-smt/database/memory"
 	"github.com/bnb-chain/zkbnb/dao/account"
 	"github.com/bnb-chain/zkbnb/dao/block"
 	"github.com/bnb-chain/zkbnb/dao/blockwitness"
@@ -54,7 +53,7 @@ func TestConstructWitness(t *testing.T) {
 	for h := int64(1); h < maxTestBlockHeight; h++ {
 		witnessHelper, err := getWitnessHelper(h - 1)
 		assert.NoError(t, err)
-		b, err := blockModel.GetBlocksBetween(h, h)
+		b, err := blockModel.GetPendingBlocksBetween(h, h)
 		assert.NoError(t, err)
 		w, err := witnessModel.GetBlockWitnessByHeight(h)
 		assert.NoError(t, err)
@@ -79,11 +78,11 @@ func TestConstructWitness(t *testing.T) {
 }
 
 func getWitnessHelper(blockHeight int64) (*WitnessHelper, error) {
-	ctx := &tree.Context{
-		Driver: tree.MemoryDB,
-		TreeDB: memory.NewMemoryDB(),
+	ctx, err := tree.NewContext("witness", tree.MemoryDB, false, false, 128, nil, nil)
+	if err != nil {
+		return nil, err
 	}
-	accountTree, accountAssetTrees, err := tree.InitAccountTree(accountModel, accountHistoryModel, blockHeight, ctx, assetTreeCacheSize)
+	accountTree, accountAssetTrees, err := tree.InitAccountTree(accountModel, accountHistoryModel, make([]int64, 0), blockHeight, ctx, assetTreeCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +103,7 @@ func testDBSetup() {
 	time.Sleep(5 * time.Second)
 	cmd := exec.Command("docker", "run", "--name", "postgres-ut-witness", "-p", "5434:5432",
 		"-e", "POSTGRES_PASSWORD=ZkBNB@123", "-e", "POSTGRES_USER=postgres", "-e", "POSTGRES_DB=zkbnb",
-		"-e", "PGDATA=/var/lib/postgresql/pgdata", "-d", "ghcr.io/bnb-chain/zkbnb/zkbnb-ut-postgres:blockgas")
+		"-e", "PGDATA=/var/lib/postgresql/pgdata", "-d", "ghcr.io/bnb-chain/zkbnb/zkbnb-ut-postgres:latest")
 	if err := cmd.Run(); err != nil {
 		panic(err)
 	}

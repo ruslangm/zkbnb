@@ -4,15 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"gorm.io/plugin/dbresolver"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/panjf2000/ants/v2"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"github.com/bnb-chain/zkbnb-crypto/circuit"
+	bsmt "github.com/bnb-chain/zkbnb-smt"
 	smt "github.com/bnb-chain/zkbnb-smt"
 	utils "github.com/bnb-chain/zkbnb/common/prove"
 	"github.com/bnb-chain/zkbnb/dao/account"
@@ -29,8 +31,42 @@ const (
 	UnprovedBlockWitnessTimeout = 10 * time.Minute
 
 	BlockProcessDelta = 10
+)
 
-	defaultTaskPoolSize = 1000
+var (
+	l2BlockWitnessGenerateHeightMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "l2Block_witness_generate_height",
+		Help:      "l2Block_memory_height metrics.",
+	})
+	AccountLatestVersionTreeMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "witness_account_latest_version",
+		Help:      "Account latest version metrics.",
+	})
+	AccountRecentVersionTreeMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "witness_account_recent_version",
+		Help:      "Account recent version metrics.",
+	})
+	NftTreeLatestVersionMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "witness_nft_latest_version",
+		Help:      "Nft latest version metrics.",
+	})
+	NftTreeRecentVersionMetric = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "witness_nft_recent_version",
+		Help:      "Nft recent version metrics.",
+	})
+)
+
+var (
+	l2WitnessHeightMetrics = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "zkbnb",
+		Name:      "l2_witness_height",
+		Help:      "l2_witness_height metrics.",
+	})
 )
 
 type Witness struct {
@@ -43,7 +79,6 @@ type Witness struct {
 	accountTree smt.SparseMerkleTree
 	assetTrees  *tree.AssetTreeCache
 	nftTree     smt.SparseMerkleTree
-	taskPool    *ants.Pool
 
 	// The data access object
 	db                  *gorm.DB
@@ -56,11 +91,34 @@ type Witness struct {
 }
 
 func NewWitness(c config.Config) (*Witness, error) {
-	datasource := c.Postgres.DataSource
-	db, err := gorm.Open(postgres.Open(datasource))
-	if err != nil {
-		return nil, fmt.Errorf("gorm connect db error, err: %v", err)
+
+	if err := prometheus.Register(l2BlockWitnessGenerateHeightMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register l2BlockWitnessGenerateHeightMetric error: %v", err)
 	}
+	if err := prometheus.Register(AccountLatestVersionTreeMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register AccountLatestVersionTreeMetric error: %v", err)
+	}
+	if err := prometheus.Register(AccountRecentVersionTreeMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register AccountRecentVersionTreeMetric error: %v", err)
+	}
+	if err := prometheus.Register(NftTreeLatestVersionMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register NftTreeLatestVersionMetric error: %v", err)
+	}
+	if err := prometheus.Register(NftTreeRecentVersionMetric); err != nil {
+		return nil, fmt.Errorf("prometheus.Register NftTreeRecentVersionMetric error: %v", err)
+	}
+
+	masterDataSource := c.Postgres.MasterDataSource
+	slaveDataSource := c.Postgres.SlaveDataSource
+	db, err := gorm.Open(postgres.Open(masterDataSource))
+	if err := prometheus.Register(l2WitnessHeightMetrics); err != nil {
+		return nil, fmt.Errorf("prometheus.Register l2WitnessHeightMetrics error: %v", err)
+	}
+
+	db.Use(dbresolver.Register(dbresolver.Config{
+		Sources:  []gorm.Dialector{postgres.Open(masterDataSource)},
+		Replicas: []gorm.Dialector{postgres.Open(slaveDataSource)},
+	}))
 
 	w := &Witness{
 		config:              c,
@@ -87,23 +145,34 @@ func (w *Witness) initState() error {
 	}
 
 	// dbinitializer tree database
-	treeCtx := &tree.Context{
-		Name:          "witness",
-		Driver:        w.config.TreeDB.Driver,
-		LevelDBOption: &w.config.TreeDB.LevelDBOption,
-		RedisDBOption: &w.config.TreeDB.RedisDBOption,
+	treeCtx, err := tree.NewContext("witness", w.config.TreeDB.Driver, false, false, w.config.TreeDB.RoutinePoolSize, &w.config.TreeDB.LevelDBOption, &w.config.TreeDB.RedisDBOption)
+	if err != nil {
+		return err
 	}
+
+	treeCtx.SetOptions(bsmt.BatchSizeLimit(3 * 1024 * 1024))
 	err = tree.SetupTreeDB(treeCtx)
 	if err != nil {
 		return fmt.Errorf("init tree database failed %v", err)
 	}
 	w.treeCtx = treeCtx
-
-	// init accountTree and accountStateTrees
-	// the initial block number use the latest sent block
+	blockInfo, err := w.blockModel.GetBlockByHeightWithoutTx(witnessHeight + 1)
+	if err != nil && err != types.DbErrNotFound {
+		logx.Error("get block failed: ", err)
+		panic("get block failed: " + err.Error())
+	}
+	accountIndexes := make([]int64, 0)
+	if blockInfo != nil && blockInfo.AccountIndexes != "[]" && blockInfo.AccountIndexes != "" {
+		err = json.Unmarshal([]byte(blockInfo.AccountIndexes), &accountIndexes)
+		if err != nil {
+			logx.Error("json err unmarshal failed")
+			panic("json err unmarshal failed: " + err.Error())
+		}
+	}
 	w.accountTree, w.assetTrees, err = tree.InitAccountTree(
 		w.accountModel,
 		w.accountHistoryModel,
+		accountIndexes,
 		witnessHeight,
 		treeCtx,
 		w.config.TreeDB.AssetTreeCacheSize,
@@ -118,11 +187,6 @@ func (w *Witness) initState() error {
 	if err != nil {
 		return fmt.Errorf("initNftTree error: %v", err)
 	}
-	taskPool, err := ants.NewPool(defaultTaskPoolSize)
-	if err != nil {
-		return err
-	}
-	w.taskPool = taskPool
 	w.helper = utils.NewWitnessHelper(w.treeCtx, w.accountTree, w.nftTree, w.assetTrees, w.accountModel, w.accountHistoryModel)
 	return nil
 }
@@ -134,7 +198,7 @@ func (w *Witness) GenerateBlockWitness() (err error) {
 		return err
 	}
 	// get next batch of blocks
-	blocks, err := w.blockModel.GetBlocksBetween(latestWitnessHeight+1, latestWitnessHeight+BlockProcessDelta)
+	blocks, err := w.blockModel.GetPendingBlocksBetween(latestWitnessHeight+1, latestWitnessHeight+BlockProcessDelta)
 	if err != nil {
 		if err != types.DbErrNotFound {
 			return err
@@ -156,20 +220,28 @@ func (w *Witness) GenerateBlockWitness() (err error) {
 			return fmt.Errorf("failed to construct block witness, block:%d, err: %v", block.BlockHeight, err)
 		}
 		// Step2: commit trees for witness
-		err = tree.CommitTrees(w.taskPool, uint64(latestVerifiedBlockNr), w.accountTree, w.assetTrees, w.nftTree)
+		err = tree.CommitTrees(uint64(latestVerifiedBlockNr), block.BlockHeight, w.accountTree, w.assetTrees, w.nftTree)
 		if err != nil {
 			return fmt.Errorf("unable to commit trees after txs is executed, block:%d, error: %v", block.BlockHeight, err)
 		}
 		// Step3: insert witness into database
 		err = w.blockWitnessModel.CreateBlockWitness(blockWitness)
+		l2BlockWitnessGenerateHeightMetric.Set(float64(latestVerifiedBlockNr))
+		AccountLatestVersionTreeMetric.Set(float64(w.accountTree.LatestVersion()))
+		AccountRecentVersionTreeMetric.Set(float64(w.accountTree.RecentVersion()))
+		NftTreeLatestVersionMetric.Set(float64(w.nftTree.LatestVersion()))
+		NftTreeRecentVersionMetric.Set(float64(w.nftTree.RecentVersion()))
+		l2WitnessHeightMetrics.Set(float64(blockWitness.Height))
 		if err != nil {
 			// rollback trees
-			rollBackErr := tree.RollBackTrees(w.taskPool, uint64(block.BlockHeight)-1, w.accountTree, w.assetTrees, w.nftTree)
+			rollBackErr := tree.RollBackTrees(uint64(block.BlockHeight)-1, w.accountTree, w.assetTrees, w.nftTree)
 			if rollBackErr != nil {
 				logx.Errorf("unable to rollback trees %v", rollBackErr)
 			}
 			return fmt.Errorf("create unproved crypto block error, block:%d, err: %v", block.BlockHeight, err)
 		}
+		w.assetTrees.CleanChanges()
+
 	}
 	return nil
 }
@@ -180,8 +252,12 @@ func (w *Witness) RescheduleBlockWitness() {
 		logx.Errorf("failed to get next witness to check, err: %s", err.Error())
 	}
 	nextBlockWitness, err := w.blockWitnessModel.GetBlockWitnessByHeight(nextBlockNumber)
-	if err != nil {
+	if err != nil && err != types.DbErrNotFound {
 		logx.Errorf("failed to get latest block witness, err: %s", err.Error())
+		return
+	}
+
+	if nextBlockWitness == nil {
 		return
 	}
 
@@ -272,10 +348,13 @@ func (w *Witness) constructBlockWitness(block *block.Block, latestVerifiedBlockN
 	if err != nil {
 		return nil, err
 	}
-
-	newStateRoot = tree.ComputeStateRootHash(w.accountTree.Root(), w.nftTree.Root())
-	if common.Bytes2Hex(newStateRoot) != block.StateRoot {
-		return nil, errors.New("state root doesn't match")
+	accountTreeRoot := w.accountTree.Root()
+	nftTreeRoot := w.nftTree.Root()
+	logx.Infof("witness account tree root=%s,nft tree root=%s", common.Bytes2Hex(accountTreeRoot), common.Bytes2Hex(nftTreeRoot))
+	newStateRoot = tree.ComputeStateRootHash(accountTreeRoot, nftTreeRoot)
+	newStateRootStr := common.Bytes2Hex(newStateRoot)
+	if newStateRootStr != block.StateRoot {
+		return nil, errors.New("state root doesn't match," + "newStateRootStr=" + newStateRootStr + ",block.StateRoot=" + block.StateRoot)
 	}
 
 	b := &circuit.Block{

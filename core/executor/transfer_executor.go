@@ -43,11 +43,11 @@ func (e *TransferExecutor) Prepare() error {
 	return e.BaseExecutor.Prepare()
 }
 
-func (e *TransferExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *TransferExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	bc := e.bc
 	txInfo := e.txInfo
 
-	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk)
+	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk, skipSigChk)
 	if err != nil {
 		return err
 	}
@@ -60,20 +60,23 @@ func (e *TransferExecutor) VerifyInputs(skipGasAmtChk bool) error {
 	if err != nil {
 		return err
 	}
+	if fromAccount.AccountIndex == toAccount.AccountIndex {
+		return types.AppErrAccountInvalidToAccount
+	}
 	if txInfo.ToAccountNameHash != toAccount.AccountNameHash {
-		return errors.New("invalid to account name hash")
+		return types.AppErrInvalidToAccountNameHash
 	}
 	if txInfo.GasFeeAssetId != txInfo.AssetId {
 		if fromAccount.AssetInfo[txInfo.GasFeeAssetId].Balance.Cmp(txInfo.GasFeeAssetAmount) < 0 {
-			return errors.New("invalid gas asset amount")
+			return types.AppErrInvalidGasFeeAmount
 		}
 		if fromAccount.AssetInfo[txInfo.AssetId].Balance.Cmp(txInfo.AssetAmount) < 0 {
-			return errors.New("invalid asset amount")
+			return types.AppErrInvalidAssetAmount
 		}
 	} else {
 		deltaBalance := ffmath.Add(txInfo.AssetAmount, txInfo.GasFeeAssetAmount)
 		if fromAccount.AssetInfo[txInfo.AssetId].Balance.Cmp(deltaBalance) < 0 {
-			return errors.New("invalid asset amount")
+			return types.AppErrInvalidAssetAmount
 		}
 	}
 
@@ -101,7 +104,7 @@ func (e *TransferExecutor) ApplyTransaction() error {
 	stateCache := e.bc.StateDB()
 	stateCache.SetPendingAccount(txInfo.FromAccountIndex, fromAccount)
 	stateCache.SetPendingAccount(txInfo.ToAccountIndex, toAccount)
-	stateCache.SetPendingUpdateGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
+	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
 }
 
@@ -117,29 +120,21 @@ func (e *TransferExecutor) GeneratePubData() error {
 		return err
 	}
 	buf.Write(packedAmountBytes)
-	buf.Write(common2.Uint32ToBytes(uint32(txInfo.GasAccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.GasFeeAssetId)))
 	packedFeeBytes, err := common2.FeeToPackedFeeBytes(txInfo.GasFeeAssetAmount)
 	if err != nil {
 		return err
 	}
 	buf.Write(packedFeeBytes)
-	chunk := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk)
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.CallDataHash))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PubData = append(stateCache.PubData, pubData...)
 	return nil
 }
 
-func (e *TransferExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *TransferExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -151,7 +146,7 @@ func (e *TransferExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.GasFee = e.txInfo.GasFeeAssetAmount.String()
 	e.tx.AssetId = e.txInfo.AssetId
 	e.tx.TxAmount = e.txInfo.AssetAmount.String()
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *TransferExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {

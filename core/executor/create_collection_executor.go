@@ -54,10 +54,9 @@ func (e *CreateCollectionExecutor) Prepare() error {
 	return nil
 }
 
-func (e *CreateCollectionExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *CreateCollectionExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	txInfo := e.txInfo
-
-	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk)
+	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk, skipSigChk)
 	if err != nil {
 		return err
 	}
@@ -67,7 +66,7 @@ func (e *CreateCollectionExecutor) VerifyInputs(skipGasAmtChk bool) error {
 		return err
 	}
 	if fromAccount.AssetInfo[txInfo.GasFeeAssetId].Balance.Cmp(txInfo.GasFeeAssetAmount) < 0 {
-		return errors.New("balance is not enough")
+		return types.AppErrBalanceNotEnough
 	}
 
 	return nil
@@ -89,7 +88,7 @@ func (e *CreateCollectionExecutor) ApplyTransaction() error {
 
 	stateCache := e.bc.StateDB()
 	stateCache.SetPendingAccount(fromAccount.AccountIndex, fromAccount)
-	stateCache.SetPendingUpdateGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
+	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
 }
 
@@ -100,7 +99,6 @@ func (e *CreateCollectionExecutor) GeneratePubData() error {
 	buf.WriteByte(uint8(types.TxTypeCreateCollection))
 	buf.Write(common2.Uint32ToBytes(uint32(txInfo.AccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.CollectionId)))
-	buf.Write(common2.Uint32ToBytes(uint32(txInfo.GasAccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.GasFeeAssetId)))
 	packedFeeBytes, err := common2.FeeToPackedFeeBytes(txInfo.GasFeeAssetAmount)
 	if err != nil {
@@ -108,22 +106,14 @@ func (e *CreateCollectionExecutor) GeneratePubData() error {
 		return err
 	}
 	buf.Write(packedFeeBytes)
-	chunk := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk)
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
 
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 	stateCache := e.bc.StateDB()
 	stateCache.PubData = append(stateCache.PubData, pubData...)
 	return nil
 }
 
-func (e *CreateCollectionExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *CreateCollectionExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -134,7 +124,7 @@ func (e *CreateCollectionExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.GasFeeAssetId = e.txInfo.GasFeeAssetId
 	e.tx.GasFee = e.txInfo.GasFeeAssetAmount.String()
 	e.tx.CollectionId = e.txInfo.CollectionId
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *CreateCollectionExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {

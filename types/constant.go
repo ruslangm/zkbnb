@@ -30,7 +30,6 @@ const (
 	EmptyNftContentHash      = "0"
 	EmptyAccountNameHash     = "0"
 	EmptyTxHash              = "0"
-	EmptyL1TokenId           = "0"
 	EmptyL1Address           = "0"
 	EmptyCreatorTreasuryRate = 0
 
@@ -45,8 +44,9 @@ const (
 	NilExpiredAt       = math.MaxInt64
 	NilAssetAmount     = "0"
 
-	GasAccount = int64(1)
-	BNBAssetId = 0
+	GasAccount  = int64(1)
+	BNBAssetId  = 0
+	BUSDAssetId = 1
 )
 
 var (

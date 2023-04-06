@@ -19,6 +19,7 @@ package dbinitializer
 
 import (
 	"encoding/json"
+	"github.com/bnb-chain/zkbnb/dao/rollback"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -51,29 +52,33 @@ type contractAddr struct {
 	ZnsResolverProxy   string
 	ZkBNBProxy         string
 	UpgradeGateKeeper  string
+	BUSDToken          string
 	LEGToken           string
 	REYToken           string
 	ERC721             string
 	ZnsPriceOracle     string
+	DefaultNftFactory  string
 }
 
 type dao struct {
-	sysConfigModel       sysconfig.SysConfigModel
-	accountModel         account.AccountModel
-	accountHistoryModel  account.AccountHistoryModel
-	assetModel           asset.AssetModel
-	txPoolModel          tx.TxPoolModel
-	txDetailModel        tx.TxDetailModel
-	txModel              tx.TxModel
-	blockModel           block.BlockModel
-	compressedBlockModel compressedblock.CompressedBlockModel
-	blockWitnessModel    blockwitness.BlockWitnessModel
-	proofModel           proof.ProofModel
-	l1SyncedBlockModel   l1syncedblock.L1SyncedBlockModel
-	priorityRequestModel priorityrequest.PriorityRequestModel
-	l1RollupTModel       l1rolluptx.L1RollupTxModel
-	nftModel             nft.L2NftModel
-	nftHistoryModel      nft.L2NftHistoryModel
+	sysConfigModel          sysconfig.SysConfigModel
+	accountModel            account.AccountModel
+	accountHistoryModel     account.AccountHistoryModel
+	assetModel              asset.AssetModel
+	txPoolModel             tx.TxPoolModel
+	txDetailModel           tx.TxDetailModel
+	txModel                 tx.TxModel
+	blockModel              block.BlockModel
+	compressedBlockModel    compressedblock.CompressedBlockModel
+	blockWitnessModel       blockwitness.BlockWitnessModel
+	proofModel              proof.ProofModel
+	l1SyncedBlockModel      l1syncedblock.L1SyncedBlockModel
+	priorityRequestModel    priorityrequest.PriorityRequestModel
+	l1RollupTModel          l1rolluptx.L1RollupTxModel
+	nftModel                nft.L2NftModel
+	nftHistoryModel         nft.L2NftHistoryModel
+	rollbackModel           rollback.RollbackModel
+	nftMetadataHistoryModel nft.L2NftMetadataHistoryModel
 }
 
 func Initialize(
@@ -81,7 +86,9 @@ func Initialize(
 	contractAddrFile string,
 	bscTestNetworkRPC, localTestNetworkRPC string,
 ) error {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
 	if err != nil {
 		return err
 	}
@@ -92,22 +99,24 @@ func Initialize(
 	logx.Infof("init configs: %s", string(unmarshal))
 
 	dao := &dao{
-		sysConfigModel:       sysconfig.NewSysConfigModel(db),
-		accountModel:         account.NewAccountModel(db),
-		accountHistoryModel:  account.NewAccountHistoryModel(db),
-		assetModel:           asset.NewAssetModel(db),
-		txPoolModel:          tx.NewTxPoolModel(db),
-		txDetailModel:        tx.NewTxDetailModel(db),
-		txModel:              tx.NewTxModel(db),
-		blockModel:           block.NewBlockModel(db),
-		compressedBlockModel: compressedblock.NewCompressedBlockModel(db),
-		blockWitnessModel:    blockwitness.NewBlockWitnessModel(db),
-		proofModel:           proof.NewProofModel(db),
-		l1SyncedBlockModel:   l1syncedblock.NewL1SyncedBlockModel(db),
-		priorityRequestModel: priorityrequest.NewPriorityRequestModel(db),
-		l1RollupTModel:       l1rolluptx.NewL1RollupTxModel(db),
-		nftModel:             nft.NewL2NftModel(db),
-		nftHistoryModel:      nft.NewL2NftHistoryModel(db),
+		sysConfigModel:          sysconfig.NewSysConfigModel(db),
+		accountModel:            account.NewAccountModel(db),
+		accountHistoryModel:     account.NewAccountHistoryModel(db),
+		assetModel:              asset.NewAssetModel(db),
+		txPoolModel:             tx.NewTxPoolModel(db),
+		txDetailModel:           tx.NewTxDetailModel(db),
+		txModel:                 tx.NewTxModel(db),
+		blockModel:              block.NewBlockModel(db),
+		compressedBlockModel:    compressedblock.NewCompressedBlockModel(db),
+		blockWitnessModel:       blockwitness.NewBlockWitnessModel(db),
+		proofModel:              proof.NewProofModel(db),
+		l1SyncedBlockModel:      l1syncedblock.NewL1SyncedBlockModel(db),
+		priorityRequestModel:    priorityrequest.NewPriorityRequestModel(db),
+		l1RollupTModel:          l1rolluptx.NewL1RollupTxModel(db),
+		nftModel:                nft.NewL2NftModel(db),
+		nftHistoryModel:         nft.NewL2NftHistoryModel(db),
+		rollbackModel:           rollback.NewRollbackModel(db),
+		nftMetadataHistoryModel: nft.NewL2NftMetadataHistoryModel(db),
 	}
 
 	dropTables(dao)
@@ -129,11 +138,23 @@ func initSysConfig(svrConf *contractAddr, bscTestNetworkRPC, localTestNetworkRPC
 	bnbGasFee[types.TxTypeCancelOffer] = 12000000000000
 	bnbGasFee[types.TxTypeWithdrawNft] = 20000000000000
 
+	busdGasFee := make(map[int]int64)
+	busdGasFee[types.TxTypeTransfer] = 10000000000000
+	busdGasFee[types.TxTypeWithdraw] = 20000000000000
+	busdGasFee[types.TxTypeCreateCollection] = 10000000000000
+	busdGasFee[types.TxTypeMintNft] = 10000000000000
+	busdGasFee[types.TxTypeTransferNft] = 12000000000000
+	busdGasFee[types.TxTypeAtomicMatch] = 18000000000000
+	busdGasFee[types.TxTypeCancelOffer] = 12000000000000
+	busdGasFee[types.TxTypeWithdrawNft] = 20000000000000
+
 	gasFeeConfig := make(map[uint32]map[int]int64) // asset id -> (tx type -> gas fee value)
 	gasFeeConfig[types.BNBAssetId] = bnbGasFee     // bnb asset
+	gasFeeConfig[types.BUSDAssetId] = busdGasFee   // busd asset
 
 	gas, err := json.Marshal(gasFeeConfig)
 	if err != nil {
+		logx.Severe("fail to marshal gas fee config")
 		panic("fail to marshal gas fee config")
 	}
 
@@ -188,16 +209,31 @@ func initSysConfig(svrConf *contractAddr, bscTestNetworkRPC, localTestNetworkRPC
 			ValueType: "string",
 			Comment:   "Zns Price Oracle",
 		},
+		{
+			Name:      types.DefaultNftFactory,
+			Value:     svrConf.DefaultNftFactory,
+			ValueType: "string",
+			Comment:   "ZkBNB default nft factory contract on BSC",
+		},
 	}
 }
 
-func initAssetsInfo() []*asset.Asset {
+func initAssetsInfo(busdAddress string) []*asset.Asset {
 	return []*asset.Asset{
 		{
-			AssetId:     0,
+			AssetId:     types.BNBAssetId,
 			L1Address:   "0x00",
 			AssetName:   "BNB",
 			AssetSymbol: "BNB",
+			Decimals:    18,
+			Status:      0,
+			IsGasAsset:  asset.IsGasAsset,
+		},
+		{
+			AssetId:     types.BUSDAssetId,
+			L1Address:   busdAddress,
+			AssetName:   "BUSD",
+			AssetSymbol: "BUSD",
 			Decimals:    18,
 			Status:      0,
 			IsGasAsset:  asset.IsGasAsset,
@@ -222,6 +258,9 @@ func dropTables(dao *dao) {
 	assert.Nil(nil, dao.l1RollupTModel.DropL1RollupTxTable())
 	assert.Nil(nil, dao.nftModel.DropL2NftTable())
 	assert.Nil(nil, dao.nftHistoryModel.DropL2NftHistoryTable())
+	assert.Nil(nil, dao.rollbackModel.DropRollbackTable())
+	assert.Nil(nil, dao.nftMetadataHistoryModel.DropL2NftMetadataHistoryTable())
+
 }
 
 func initTable(dao *dao, svrConf *contractAddr, bscTestNetworkRPC, localTestNetworkRPC string) {
@@ -241,13 +280,17 @@ func initTable(dao *dao, svrConf *contractAddr, bscTestNetworkRPC, localTestNetw
 	assert.Nil(nil, dao.l1RollupTModel.CreateL1RollupTxTable())
 	assert.Nil(nil, dao.nftModel.CreateL2NftTable())
 	assert.Nil(nil, dao.nftHistoryModel.CreateL2NftHistoryTable())
-	rowsAffected, err := dao.assetModel.CreateAssets(initAssetsInfo())
+	assert.Nil(nil, dao.rollbackModel.CreateRollbackTable())
+	assert.Nil(nil, dao.nftMetadataHistoryModel.CreateL2NftMetadataHistoryTable())
+	rowsAffected, err := dao.assetModel.CreateAssets(initAssetsInfo(svrConf.BUSDToken))
 	if err != nil {
+		logx.Severe(err)
 		panic(err)
 	}
 	logx.Infof("l2 assets info rows affected: %d", rowsAffected)
 	rowsAffected, err = dao.sysConfigModel.CreateSysConfigs(initSysConfig(svrConf, bscTestNetworkRPC, localTestNetworkRPC))
 	if err != nil {
+		logx.Severe(err)
 		panic(err)
 	}
 	logx.Infof("sys config rows affected: %d", rowsAffected)
@@ -264,6 +307,7 @@ func initTable(dao *dao, svrConf *contractAddr, bscTestNetworkRPC, localTestNetw
 		BlockStatus:                  block.StatusVerifiedAndExecuted,
 	})
 	if err != nil {
+		logx.Severe(err)
 		panic(err)
 	}
 }

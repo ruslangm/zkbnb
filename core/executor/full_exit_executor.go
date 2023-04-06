@@ -26,7 +26,7 @@ func NewFullExitExecutor(bc IBlockchain, tx *tx.Tx) (TxExecutor, error) {
 	txInfo, err := types.ParseFullExitTxInfo(tx.TxInfo)
 	if err != nil {
 		logx.Errorf("parse full exit tx failed: %s", err.Error())
-		return nil, errors.New("invalid tx info")
+		return nil, types.AppErrInvalidTxInfo
 	}
 
 	return &FullExitExecutor{
@@ -65,7 +65,7 @@ func (e *FullExitExecutor) Prepare() error {
 	return nil
 }
 
-func (e *FullExitExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *FullExitExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	return nil
 }
 
@@ -94,15 +94,9 @@ func (e *FullExitExecutor) GeneratePubData() error {
 	buf.Write(common2.Uint32ToBytes(uint32(txInfo.AccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.AssetId)))
 	buf.Write(common2.Uint128ToBytes(txInfo.AssetAmount))
-	chunk := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk)
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.AccountNameHash))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
+
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PriorityOperations++
@@ -113,7 +107,7 @@ func (e *FullExitExecutor) GeneratePubData() error {
 	return nil
 }
 
-func (e *FullExitExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *FullExitExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -124,7 +118,7 @@ func (e *FullExitExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.AssetId = e.txInfo.AssetId
 	e.tx.TxAmount = e.txInfo.AssetAmount.String()
 	e.tx.AccountIndex = e.txInfo.AccountIndex
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *FullExitExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {

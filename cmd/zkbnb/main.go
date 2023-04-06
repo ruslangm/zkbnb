@@ -2,20 +2,28 @@ package main
 
 import (
 	"fmt"
+	"github.com/bnb-chain/zkbnb/tools/query"
 	"os"
 	"runtime"
 
 	"github.com/urfave/cli/v2"
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/bnb-chain/zkbnb/cmd/flags"
+	"github.com/bnb-chain/zkbnb/common/metrics"
+	pprofServer "github.com/bnb-chain/zkbnb/common/metrics/pprof"
+	prometheusServer "github.com/bnb-chain/zkbnb/common/metrics/prometheus"
 	"github.com/bnb-chain/zkbnb/service/apiserver"
 	"github.com/bnb-chain/zkbnb/service/committer"
+	"github.com/bnb-chain/zkbnb/service/fullnode"
 	"github.com/bnb-chain/zkbnb/service/monitor"
 	"github.com/bnb-chain/zkbnb/service/prover"
 	"github.com/bnb-chain/zkbnb/service/sender"
 	"github.com/bnb-chain/zkbnb/service/witness"
 	"github.com/bnb-chain/zkbnb/tools/dbinitializer"
 	"github.com/bnb-chain/zkbnb/tools/recovery"
+
+	"net/http"
 )
 
 // Build Info (set via linker flags)
@@ -47,12 +55,18 @@ func main() {
 				Usage: "Run prover service",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return prover.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
@@ -61,12 +75,18 @@ func main() {
 				Usage: "Run witness service",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return witness.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
@@ -75,12 +95,18 @@ func main() {
 				Usage: "Run monitor service",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return monitor.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
@@ -88,14 +114,34 @@ func main() {
 				Name: "committer",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Usage: "Run committer service",
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return committer.Run(cCtx.String(flags.ConfigFlag.Name))
+				},
+			},
+			{
+				Name: "fullnode",
+				Flags: []cli.Flag{
+					flags.ConfigFlag,
+				},
+				Usage: "Run fullnode service",
+				Action: func(cCtx *cli.Context) error {
+					if !cCtx.IsSet(flags.ConfigFlag.Name) {
+						return cli.ShowSubcommandHelp(cCtx)
+					}
+
+					return fullnode.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
 			{
@@ -103,12 +149,18 @@ func main() {
 				Usage: "Run sender service",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return sender.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
@@ -117,12 +169,18 @@ func main() {
 				Usage: "Run apiserver service",
 				Flags: []cli.Flag{
 					flags.ConfigFlag,
+					flags.MetricsEnabledFlag,
+					flags.MetricsHTTPFlag,
+					flags.MetricsPortFlag,
+					flags.PProfEnabledFlag,
+					flags.PProfAddrFlag,
+					flags.PProfPortFlag,
 				},
 				Action: func(cCtx *cli.Context) error {
 					if !cCtx.IsSet(flags.ConfigFlag.Name) {
 						return cli.ShowSubcommandHelp(cCtx)
 					}
-
+					startMetricsServer(cCtx)
 					return apiserver.Run(cCtx.String(flags.ConfigFlag.Name))
 				},
 			},
@@ -186,9 +244,83 @@ func main() {
 					},
 				},
 			},
+			{
+				Name:  "treedb",
+				Usage: "TreeDB tools",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "query",
+						Usage: "query treedb",
+						Flags: []cli.Flag{
+							flags.ConfigFlag,
+							flags.BlockHeightFlag,
+							flags.ServiceNameFlag,
+							flags.BatchSizeFlag,
+						},
+						Action: func(cCtx *cli.Context) error {
+							if !cCtx.IsSet(flags.ServiceNameFlag.Name) ||
+								!cCtx.IsSet(flags.BlockHeightFlag.Name) ||
+								!cCtx.IsSet(flags.ConfigFlag.Name) {
+								return cli.ShowSubcommandHelp(cCtx)
+							}
+							query.QueryTreeDB(
+								cCtx.String(flags.ConfigFlag.Name),
+								cCtx.Int64(flags.BlockHeightFlag.Name),
+								cCtx.String(flags.ServiceNameFlag.Name),
+								cCtx.Int(flags.BatchSizeFlag.Name),
+							)
+							return nil
+						},
+					},
+				},
+			},
 		},
 	}
+
 	if err := app.Run(os.Args); err != nil {
 		fmt.Println(err)
+	}
+}
+
+func startMetricsServer(ctx *cli.Context) {
+	if !ctx.Bool(flags.PProfEnabledFlag.Name) &&
+		!ctx.Bool(flags.MetricsEnabledFlag.Name) {
+		return
+	}
+
+	pprofAddress := fmt.Sprintf("%s:%d",
+		ctx.String(flags.PProfAddrFlag.Name),
+		ctx.Int(flags.PProfPortFlag.Name))
+	metricsAddress := fmt.Sprintf("%s:%d",
+		ctx.String(flags.MetricsHTTPFlag.Name),
+		ctx.Int(flags.MetricsPortFlag.Name))
+
+	pprofMux := metrics.NewRunOnceHttpMux(http.NewServeMux())
+	metricsMux := metrics.NewRunOnceHttpMux(http.NewServeMux())
+	if ctx.Bool(flags.PProfEnabledFlag.Name) && ctx.Bool(flags.MetricsEnabledFlag.Name) &&
+		metricsAddress == pprofAddress {
+		// point to the same endpoint
+		pprofMux = metricsMux
+	}
+
+	pprofServer := pprofServer.NewPProfServer(pprofMux, pprofAddress)
+	prometheusServer := prometheusServer.NewPrometheusServer(metricsMux, metricsAddress)
+
+	if ctx.Bool(flags.MetricsEnabledFlag.Name) {
+		go func() {
+			logx.Info("Starting pprof server addr", fmt.Sprintf("http://%s/debug/pprof", pprofAddress))
+			if err := pprofServer.Start(); err != nil {
+				logx.Error("Failure in running pprof server", "err", err)
+			}
+		}()
+	}
+
+	if ctx.Bool(flags.MetricsEnabledFlag.Name) {
+		go func() {
+			logx.Info("Starting metrics server addr", fmt.Sprintf("http://%s/debug/metrics", metricsAddress))
+			if err := prometheusServer.Start(); err != nil {
+				logx.Error("Failure in running metrics server", "err", err)
+			}
+		}()
 	}
 }

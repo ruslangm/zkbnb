@@ -44,10 +44,10 @@ func (e *CancelOfferExecutor) Prepare() error {
 	return e.BaseExecutor.Prepare()
 }
 
-func (e *CancelOfferExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *CancelOfferExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	txInfo := e.txInfo
 
-	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk)
+	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk, skipSigChk)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (e *CancelOfferExecutor) VerifyInputs(skipGasAmtChk bool) error {
 		return err
 	}
 	if fromAccount.AssetInfo[txInfo.GasFeeAssetId].Balance.Cmp(txInfo.GasFeeAssetAmount) < 0 {
-		return errors.New("balance is not enough")
+		return types.AppErrBalanceNotEnough
 	}
 
 	offerAssetId := txInfo.OfferId / 128
@@ -66,7 +66,7 @@ func (e *CancelOfferExecutor) VerifyInputs(skipGasAmtChk bool) error {
 	if offerAsset != nil && offerAsset.OfferCanceledOrFinalized != nil {
 		xBit := offerAsset.OfferCanceledOrFinalized.Bit(int(offerIndex))
 		if xBit == 1 {
-			return errors.New("invalid offer id, already confirmed or canceled")
+			return types.AppErrInvalidOfferState
 		}
 	}
 
@@ -94,7 +94,7 @@ func (e *CancelOfferExecutor) ApplyTransaction() error {
 
 	stateCache := e.bc.StateDB()
 	stateCache.SetPendingAccount(fromAccount.AccountIndex, fromAccount)
-	stateCache.SetPendingUpdateGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
+	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
 }
 
@@ -105,7 +105,6 @@ func (e *CancelOfferExecutor) GeneratePubData() error {
 	buf.WriteByte(uint8(types.TxTypeCancelOffer))
 	buf.Write(common2.Uint32ToBytes(uint32(txInfo.AccountIndex)))
 	buf.Write(common2.Uint24ToBytes(txInfo.OfferId))
-	buf.Write(common2.Uint32ToBytes(uint32(txInfo.GasAccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.GasFeeAssetId)))
 	packedFeeBytes, err := common2.FeeToPackedFeeBytes(txInfo.GasFeeAssetAmount)
 	if err != nil {
@@ -113,22 +112,14 @@ func (e *CancelOfferExecutor) GeneratePubData() error {
 		return err
 	}
 	buf.Write(packedFeeBytes)
-	chunk := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk)
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PubData = append(stateCache.PubData, pubData...)
 	return nil
 }
 
-func (e *CancelOfferExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *CancelOfferExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -138,7 +129,7 @@ func (e *CancelOfferExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.TxInfo = string(txInfoBytes)
 	e.tx.GasFeeAssetId = e.txInfo.GasFeeAssetId
 	e.tx.GasFee = e.txInfo.GasFeeAssetAmount.String()
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *CancelOfferExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {

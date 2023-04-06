@@ -35,9 +35,12 @@ const (
 	Governor       = "Governor"
 	ZnsPriceOracle = "ZnsPriceOracle"
 
-	AccountNameSuffix = ".legend"
+	DefaultNftFactory = "DefaultNftFactory"
+
+	AccountNameSuffix = ".zkbnb"
 )
 
 var (
-	ZeroBigInt = big.NewInt(0)
+	ZeroBigInt          = big.NewInt(0)
+	EmptyAccountAssetId = int64(0)
 )

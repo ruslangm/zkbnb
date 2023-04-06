@@ -54,11 +54,11 @@ func (e *DepositExecutor) Prepare() error {
 	return e.BaseExecutor.Prepare()
 }
 
-func (e *DepositExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *DepositExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	txInfo := e.txInfo
 
 	if txInfo.AssetAmount.Cmp(types.ZeroBigInt) < 0 {
-		return errors.New("invalid asset amount")
+		return types.AppErrInvalidAssetAmount
 	}
 
 	return nil
@@ -87,15 +87,9 @@ func (e *DepositExecutor) GeneratePubData() error {
 	buf.Write(common2.Uint32ToBytes(uint32(txInfo.AccountIndex)))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.AssetId)))
 	buf.Write(common2.Uint128ToBytes(txInfo.AssetAmount))
-	chunk1 := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk1)
 	buf.Write(common2.PrefixPaddingBufToChunkSize(txInfo.AccountNameHash))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
+
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PriorityOperations++
@@ -104,7 +98,7 @@ func (e *DepositExecutor) GeneratePubData() error {
 	return nil
 }
 
-func (e *DepositExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *DepositExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -115,7 +109,7 @@ func (e *DepositExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.AssetId = e.txInfo.AssetId
 	e.tx.TxAmount = e.txInfo.AssetAmount.String()
 	e.tx.AccountIndex = e.txInfo.AccountIndex
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *DepositExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {

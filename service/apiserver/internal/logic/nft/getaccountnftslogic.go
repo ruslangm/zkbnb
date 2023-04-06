@@ -2,6 +2,7 @@ package nft
 
 import (
 	"context"
+	"github.com/bnb-chain/zkbnb/common"
 	"strconv"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -41,7 +42,7 @@ func (l *GetAccountNftsLogic) GetAccountNfts(req *types.ReqGetAccountNfts) (resp
 	case queryByAccountIndex:
 		accountIndex, err = strconv.ParseInt(req.Value, 10, 64)
 		if err != nil || accountIndex < 0 {
-			return nil, types2.AppErrInvalidParam.RefineError("invalid value for account_index")
+			return nil, types2.AppErrInvalidAccountIndex
 		}
 	case queryByAccountName:
 		accountIndex, err = l.svcCtx.MemCache.GetAccountIndexByName(req.Value)
@@ -85,10 +86,9 @@ func (l *GetAccountNftsLogic) GetAccountNfts(req *types.ReqGetAccountNfts) (resp
 			OwnerAccountIndex:   nft.OwnerAccountIndex,
 			OwnerAccountName:    ownerName,
 			ContentHash:         nft.NftContentHash,
-			L1Address:           nft.NftL1Address,
-			L1TokenId:           nft.NftL1TokenId,
 			CreatorTreasuryRate: nft.CreatorTreasuryRate,
 			CollectionId:        nft.CollectionId,
+			IpfsId:              common.GenerateCid(nft.NftContentHash),
 		})
 	}
 	return resp, nil

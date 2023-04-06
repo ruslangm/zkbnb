@@ -39,7 +39,7 @@ func (l *GetAccountLogic) GetAccount(req *types.ReqGetAccount) (resp *types.Acco
 	case queryByIndex:
 		index, err = strconv.ParseInt(req.Value, 10, 64)
 		if err != nil || index < 0 {
-			return nil, types2.AppErrInvalidParam.RefineError("invalid value for account index")
+			return nil, types2.AppErrInvalidAccountIndex
 		}
 	case queryByName:
 		index, err = l.svcCtx.MemCache.GetAccountIndexByName(req.Value)
@@ -51,7 +51,7 @@ func (l *GetAccountLogic) GetAccount(req *types.ReqGetAccount) (resp *types.Acco
 
 	if err != nil {
 		if err == types2.DbErrNotFound {
-			return nil, types2.AppErrNotFound
+			return nil, types2.AppErrAccountNotFound
 		}
 		return nil, types2.AppErrInternal
 	}
@@ -59,15 +59,16 @@ func (l *GetAccountLogic) GetAccount(req *types.ReqGetAccount) (resp *types.Acco
 	account, err := l.svcCtx.StateFetcher.GetLatestAccount(index)
 	if err != nil {
 		if err == types2.DbErrNotFound {
-			return nil, types2.AppErrNotFound
+			return nil, types2.AppErrAccountNotFound
 		}
 		return nil, types2.AppErrInternal
 	}
 
-	maxAssetId, err := l.svcCtx.AssetModel.GetMaxAssetId()
-	if err != nil {
-		return nil, types2.AppErrInternal
-	}
+	//todo  need to confirm whether there is any impact on the function
+	//maxAssetId, err := l.svcCtx.AssetModel.GetMaxAssetId()
+	//if err != nil {
+	//	return nil, types2.AppErrInternal
+	//}
 
 	resp = &types.Account{
 		Index:  account.AccountIndex,
@@ -81,9 +82,10 @@ func (l *GetAccountLogic) GetAccount(req *types.ReqGetAccount) (resp *types.Acco
 	totalAssetValue := big.NewFloat(0)
 
 	for _, asset := range account.AssetInfo {
-		if asset.AssetId > maxAssetId {
-			continue //it is used for offer related, or empty balance; max ip id should be less than max asset id
-		}
+		//todo  need to confirm whether there is any impact on the function
+		//if asset.AssetId > maxAssetId {
+		//	continue //it is used for offer related, or empty balance; max ip id should be less than max asset id
+		//}
 		if asset.Balance == nil || asset.Balance.Cmp(types2.ZeroBigInt) == 0 {
 			continue
 		}

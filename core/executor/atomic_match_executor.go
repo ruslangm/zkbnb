@@ -51,7 +51,7 @@ func (e *AtomicMatchExecutor) Prepare() error {
 	matchNft, err := e.bc.StateDB().PrepareNft(txInfo.SellOffer.NftIndex)
 	if err != nil {
 		logx.Errorf("prepare nft failed")
-		return errors.New("internal error")
+		return err
 	}
 
 	// Set the right treasury and creator treasury amount.
@@ -68,27 +68,27 @@ func (e *AtomicMatchExecutor) Prepare() error {
 	return e.BaseExecutor.Prepare()
 }
 
-func (e *AtomicMatchExecutor) VerifyInputs(skipGasAmtChk bool) error {
+func (e *AtomicMatchExecutor) VerifyInputs(skipGasAmtChk, skipSigChk bool) error {
 	bc := e.bc
 	txInfo := e.txInfo
 
-	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk)
+	err := e.BaseExecutor.VerifyInputs(skipGasAmtChk, skipSigChk)
 	if err != nil {
 		return err
 	}
 
 	if txInfo.BuyOffer.Type != types.BuyOfferType ||
 		txInfo.SellOffer.Type != types.SellOfferType {
-		return errors.New("invalid offer type")
+		return types.AppErrInvalidOfferType
 	}
 	if txInfo.BuyOffer.AccountIndex == txInfo.SellOffer.AccountIndex {
-		return errors.New("same buyer and seller")
+		return types.AppErrSameBuyerAndSeller
 	}
 	if txInfo.SellOffer.NftIndex != txInfo.BuyOffer.NftIndex ||
 		txInfo.SellOffer.AssetId != txInfo.BuyOffer.AssetId ||
 		txInfo.SellOffer.AssetAmount.String() != txInfo.BuyOffer.AssetAmount.String() ||
 		txInfo.SellOffer.TreasuryRate != txInfo.BuyOffer.TreasuryRate {
-		return errors.New("buy offer mismatches sell offer")
+		return types.AppErrBuyOfferMismatchSellOffer
 	}
 
 	// only gas assets are allowed for atomic match
@@ -99,15 +99,15 @@ func (e *AtomicMatchExecutor) VerifyInputs(skipGasAmtChk bool) error {
 		}
 	}
 	if !found {
-		return errors.New("invalid asset of offer")
+		return types.AppErrInvalidAssetOfOffer
 	}
 
 	// Check offer expired time.
 	if err := e.bc.VerifyExpiredAt(txInfo.BuyOffer.ExpiredAt); err != nil {
-		return errors.New("invalid BuyOffer.ExpiredAt")
+		return types.AppErrInvalidBuyOfferExpireTime
 	}
 	if err := e.bc.VerifyExpiredAt(txInfo.SellOffer.ExpiredAt); err != nil {
-		return errors.New("invalid SellOffer.ExpiredAt")
+		return types.AppErrInvalidSellOfferExpireTime
 	}
 
 	fromAccount, err := bc.StateDB().GetFormatAccount(txInfo.AccountIndex)
@@ -127,26 +127,26 @@ func (e *AtomicMatchExecutor) VerifyInputs(skipGasAmtChk bool) error {
 	if txInfo.AccountIndex == txInfo.BuyOffer.AccountIndex && txInfo.GasFeeAssetId == txInfo.SellOffer.AssetId {
 		totalBalance := ffmath.Add(txInfo.GasFeeAssetAmount, txInfo.BuyOffer.AssetAmount)
 		if fromAccount.AssetInfo[txInfo.GasFeeAssetId].Balance.Cmp(totalBalance) < 0 {
-			return errors.New("sender balance is not enough")
+			return types.AppErrSellerBalanceNotEnough
 		}
 	} else {
 		if fromAccount.AssetInfo[txInfo.GasFeeAssetId].Balance.Cmp(txInfo.GasFeeAssetAmount) < 0 {
-			return errors.New("sender balance is not enough")
+			return types.AppErrSellerBalanceNotEnough
 		}
 
 		if buyAccount.AssetInfo[txInfo.BuyOffer.AssetId].Balance.Cmp(txInfo.BuyOffer.AssetAmount) < 0 {
-			return errors.New("buy balance is not enough")
+			return types.AppErrBuyerBalanceNotEnough
 		}
 	}
 
 	// Check offer canceled or finalized.
 	sellOffer := sellAccount.AssetInfo[e.sellOfferAssetId].OfferCanceledOrFinalized
 	if sellOffer.Bit(int(e.sellOfferIndex)) == 1 {
-		return errors.New("sell offer canceled or finalized")
+		return types.AppErrInvalidSellOfferState
 	}
 	buyOffer := buyAccount.AssetInfo[e.buyOfferAssetId].OfferCanceledOrFinalized
 	if buyOffer.Bit(int(e.buyOfferIndex)) == 1 {
-		return errors.New("buy offer canceled or finalized")
+		return types.AppErrInvalidBuyOfferState
 	}
 
 	// Check the seller is the owner of the nft.
@@ -155,7 +155,7 @@ func (e *AtomicMatchExecutor) VerifyInputs(skipGasAmtChk bool) error {
 		return err
 	}
 	if nft.OwnerAccountIndex != txInfo.SellOffer.AccountIndex {
-		return errors.New("seller is not owner")
+		return types.AppErrSellerNotOwner
 	}
 
 	// Verify offer signature.
@@ -220,8 +220,8 @@ func (e *AtomicMatchExecutor) ApplyTransaction() error {
 	stateCache.SetPendingAccount(sellAccount.AccountIndex, sellAccount)
 	stateCache.SetPendingAccount(creatorAccount.AccountIndex, creatorAccount)
 	stateCache.SetPendingNft(matchNft.NftIndex, matchNft)
-	stateCache.SetPendingUpdateGas(txInfo.BuyOffer.AssetId, txInfo.TreasuryAmount)
-	stateCache.SetPendingUpdateGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
+	stateCache.SetPendingGas(txInfo.BuyOffer.AssetId, txInfo.TreasuryAmount)
+	stateCache.SetPendingGas(txInfo.GasFeeAssetId, txInfo.GasFeeAssetAmount)
 	return e.BaseExecutor.ApplyTransaction()
 }
 
@@ -237,27 +237,27 @@ func (e *AtomicMatchExecutor) GeneratePubData() error {
 	buf.Write(common2.Uint24ToBytes(txInfo.SellOffer.OfferId))
 	buf.Write(common2.Uint40ToBytes(txInfo.BuyOffer.NftIndex))
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.SellOffer.AssetId)))
-	chunk1 := common2.SuffixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
 	packedAmountBytes, err := common2.AmountToPackedAmountBytes(txInfo.BuyOffer.AssetAmount)
 	if err != nil {
 		logx.Errorf("unable to convert amount to packed amount: %s", err.Error())
 		return err
 	}
 	buf.Write(packedAmountBytes)
+
 	creatorAmountBytes, err := common2.AmountToPackedAmountBytes(txInfo.CreatorAmount)
 	if err != nil {
 		logx.Errorf("unable to convert amount to packed amount: %s", err.Error())
 		return err
 	}
 	buf.Write(creatorAmountBytes)
+
 	treasuryAmountBytes, err := common2.AmountToPackedAmountBytes(txInfo.TreasuryAmount)
 	if err != nil {
 		logx.Errorf("unable to convert amount to packed amount: %s", err.Error())
 		return err
 	}
 	buf.Write(treasuryAmountBytes)
-	buf.Write(common2.Uint32ToBytes(uint32(txInfo.GasAccountIndex)))
+
 	buf.Write(common2.Uint16ToBytes(uint16(txInfo.GasFeeAssetId)))
 	packedFeeBytes, err := common2.FeeToPackedFeeBytes(txInfo.GasFeeAssetAmount)
 	if err != nil {
@@ -265,22 +265,14 @@ func (e *AtomicMatchExecutor) GeneratePubData() error {
 		return err
 	}
 	buf.Write(packedFeeBytes)
-	chunk2 := common2.PrefixPaddingBufToChunkSize(buf.Bytes())
-	buf.Reset()
-	buf.Write(chunk1)
-	buf.Write(chunk2)
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	buf.Write(common2.PrefixPaddingBufToChunkSize([]byte{}))
-	pubData := buf.Bytes()
+	pubData := common2.SuffixPaddingBuToPubdataSize(buf.Bytes())
 
 	stateCache := e.bc.StateDB()
 	stateCache.PubData = append(stateCache.PubData, pubData...)
 	return nil
 }
 
-func (e *AtomicMatchExecutor) GetExecutedTx() (*tx.Tx, error) {
+func (e *AtomicMatchExecutor) GetExecutedTx(fromApi bool) (*tx.Tx, error) {
 	txInfoBytes, err := json.Marshal(e.txInfo)
 	if err != nil {
 		logx.Errorf("unable to marshal tx, err: %s", err.Error())
@@ -293,7 +285,7 @@ func (e *AtomicMatchExecutor) GetExecutedTx() (*tx.Tx, error) {
 	e.tx.NftIndex = e.txInfo.SellOffer.NftIndex
 	e.tx.AssetId = e.txInfo.BuyOffer.AssetId
 	e.tx.TxAmount = e.txInfo.BuyOffer.AssetAmount.String()
-	return e.BaseExecutor.GetExecutedTx()
+	return e.BaseExecutor.GetExecutedTx(fromApi)
 }
 
 func (e *AtomicMatchExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
@@ -439,9 +431,9 @@ func (e *AtomicMatchExecutor) GenerateTxDetails() ([]*tx.TxDetail, error) {
 		AccountIndex: types.NilAccountIndex,
 		AccountName:  types.NilAccountName,
 		Balance: types.ConstructNftInfo(matchNft.NftIndex, matchNft.CreatorAccountIndex, matchNft.OwnerAccountIndex,
-			matchNft.NftContentHash, matchNft.NftL1TokenId, matchNft.NftL1Address, matchNft.CreatorTreasuryRate, matchNft.CollectionId).String(),
+			matchNft.NftContentHash, matchNft.CreatorTreasuryRate, matchNft.CollectionId).String(),
 		BalanceDelta: types.ConstructNftInfo(matchNft.NftIndex, matchNft.CreatorAccountIndex, txInfo.BuyOffer.AccountIndex,
-			matchNft.NftContentHash, matchNft.NftL1TokenId, matchNft.NftL1Address, matchNft.CreatorTreasuryRate, matchNft.CollectionId).String(),
+			matchNft.NftContentHash, matchNft.CreatorTreasuryRate, matchNft.CollectionId).String(),
 		Order:           order,
 		AccountOrder:    types.NilAccountOrder,
 		Nonce:           0,

@@ -3,6 +3,8 @@ package tree
 import (
 	"encoding/json"
 	"errors"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr/poseidon"
+	"hash"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/bnb-chain/zkbnb-smt/database/leveldb"
 	"github.com/bnb-chain/zkbnb-smt/database/memory"
 	"github.com/bnb-chain/zkbnb-smt/database/redis"
+	"github.com/panjf2000/ants/v2"
 )
 
 const defaultBatchReloadSize = 1000
@@ -182,6 +185,36 @@ func SetNamespace(
 	return context.TreeDB
 }
 
+const (
+	defaultTreeRoutinePoolSize = 10240
+)
+
+func NewContext(
+	name string, driver Driver,
+	reload bool, onlyQuery bool, routineSize int,
+	levelDBOption *LevelDBOption,
+	redisDBOption *RedisDBOption) (*Context, error) {
+
+	if routineSize <= 0 {
+		routineSize = defaultTreeRoutinePoolSize
+	}
+	pool, err := ants.NewPool(routineSize)
+	if err != nil {
+		return nil, err
+	}
+	return &Context{
+		Name:           name,
+		Driver:         driver,
+		LevelDBOption:  levelDBOption,
+		RedisDBOption:  redisDBOption,
+		reload:         reload,
+		onlyQuery:      onlyQuery,
+		routinePool:    pool,
+		hasher:         bsmt.NewHasherPool(func() hash.Hash { return poseidon.NewPoseidon() }),
+		defaultOptions: []bsmt.Option{bsmt.GoRoutinePool(pool)},
+	}, nil
+}
+
 type Context struct {
 	Name          string
 	Driver        Driver
@@ -190,15 +223,22 @@ type Context struct {
 
 	TreeDB          database.TreeDB
 	defaultOptions  []bsmt.Option
-	Reload          bool
+	reload          bool
+	onlyQuery       bool
 	batchReloadSize int
+	routinePool     *ants.Pool
+	hasher          *bsmt.Hasher
 }
 
 func (ctx *Context) IsLoad() bool {
-	if ctx.Reload {
+	if ctx.reload {
 		return true
 	}
 	return ctx.Driver == MemoryDB
+}
+
+func (ctx *Context) IsOnlyQuery() bool {
+	return ctx.onlyQuery
 }
 
 func (ctx *Context) Options(blockHeight int64) []bsmt.Option {
@@ -226,4 +266,12 @@ func (ctx *Context) BatchReloadSize() int {
 
 func (ctx *Context) SetBatchReloadSize(size int) {
 	ctx.batchReloadSize = size
+}
+
+func (ctx *Context) RoutinePool() *ants.Pool {
+	return ctx.routinePool
+}
+
+func (ctx *Context) Hasher() *bsmt.Hasher {
+	return ctx.hasher
 }
